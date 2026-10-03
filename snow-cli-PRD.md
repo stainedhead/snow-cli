@@ -119,7 +119,7 @@ All three agent-facing CLIs are separate binaries (so harness allow-lists and pe
 |---|---|---|
 | AUTH-A1 | Obtain the token from the daemon via `pkg/client` (`servicenow` provider); send `Authorization: Bearer`. | P0 |
 | AUTH-A2 | On HTTP 401, ask the daemon to refresh once and retry; on a second 401 exit `3`. | P0 |
-| AUTH-A3 | Refuse to run if a daemon socket is not reachable (no fallback credentials). | P0 |
+| AUTH-A3 | Refuse to run if a daemon socket is not reachable (no fallback credentials): exit `3` with a clear message that the daemon could not be reached, naming the socket tried (behavior owned by `agent-cli-core-PRD.md`, CORE-AUTH-3). | P0 |
 | AUTH-A4 | `snow whoami` shows the mapped ServiceNow user, roles summary and policy profile (§8.3). | P0 |
 
 ### 6.2 Human mode (Okta OAuth 2.0)
@@ -128,10 +128,10 @@ All three agent-facing CLIs are separate binaries (so harness allow-lists and pe
 |---|---|---|
 | AUTH-H1 | `snow auth login`: authorization code flow with **PKCE** and a **loopback redirect** (RFC 8252). The CLI opens the browser, listens on `127.0.0.1` on a free port, validates `state`, exchanges the code ✅ (pattern widely used; Okta recommends PKCE for all code flows ✅). | P0 |
 | AUTH-H2 | `snow auth login --device`: device authorization grant for SSH/headless/cloud IDE sessions ✅ (PKCE cannot redirect there). Prefer PKCE by default; device-code flows are easier to phish. | P0 |
-| AUTH-H3 | Scopes: `openid profile email offline_access snow.user`. Store access and refresh tokens in the OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service); no plaintext fallback unless `--insecure-store` is passed. | P0 |
+| AUTH-H3 | Scopes: `openid profile email offline_access snow.user`. Store access and refresh tokens in the OS keychain (macOS Keychain, Linux Secret Service; WSL2 distributions may not run a Secret Service or keyring daemon ⚠️, so confirm human-mode storage under WSL2 in M3 before relying on it); no plaintext fallback unless `--insecure-store` is passed. | P0 |
 | AUTH-H4 | Silent refresh using the refresh token; honor Okta refresh-token rotation; `snow auth status`, `snow auth logout` (revokes at Okta). | P0 |
 | AUTH-H5 | Respect Okta policies (MFA, session lifetime, device posture) and show the Okta error when blocked. | P0 |
-| AUTH-H6 | Work on macOS, Linux and Windows (human users commonly use Windows). | P0 |
+| AUTH-H6 | Work on macOS (Apple silicon) and Linux, including Windows machines through WSL2 using the Linux build. Native Windows is not a target. | P0 |
 
 **Which token goes to ServiceNow.** ServiceNow's third-party token flow accepts an ID token or access token ✅. Community guidance for Okta stresses using the `id_token` and a matching user mapping ✅. Spike (M0) both and standardize on one for humans; for agents it is always the access token from `agents-snow`.
 
@@ -291,7 +291,7 @@ Human profile keeps the same shape with broader tables, `resolve: allow`, and in
 
 ## 11. Non-functional requirements
 
-- **Stack:** Go (static binary; depends on the `agent-cli-core` module at a released tag, and gets `pkg/client` (shared with the daemon) through it). Platforms: macOS, Linux; Windows for human mode.
+- **Stack:** Go (static binary; depends on the `agent-cli-core` module at a released tag, and gets `pkg/client` (shared with the daemon) through it). Platforms: macOS (Apple silicon) and Linux; Windows users run the Linux build under WSL2 (native Windows is not a target).
 - **Latency:** local overhead < 50 ms; typical command dominated by ServiceNow response time.
 - **Data handling:** ServiceNow records can contain personal or confidential data, and agent output flows into the model's context. Apply your data-classification rules through the field allowlist (§9) and an optional redaction hook (regex/field masks) before output.
 - **Observability:** audit JSONL per command; correlate with ServiceNow transaction logs by user and timestamp.
@@ -304,7 +304,7 @@ Human profile keeps the same shape with broader tables, `resolve: allow`, and in
 | **M0 Spikes** | OIDC provider records #1/#2 on a sub-prod instance; agent token accepted; human token (ID vs access) decision; user mapping; `whoami`; confirm ⚠️ items (correlation fields, default deny, producer role needs) | Spike report with chosen mapping and role list |
 | **M1 Read path** | Core, `table`, `cmdb`, `my work`, read verbs, selftest (read matrix) | Agent and human can read allowed data; forbidden tables return exit 4/6 |
 | **M2 Write path** | `incident create` (producer), `incident update`, `task update`, idempotency, provenance, policy | Duplicate create is deduplicated; denied fields rejected; audit records complete |
-| **M3 Human mode** | PKCE + device login, keychain storage, Windows support | Human runs the same commands as self; MFA enforced by Okta |
+| **M3 Human mode** | PKCE + device login, keychain storage, WSL2 support | Human runs the same commands as self; MFA enforced by Okta |
 | **M4 Catalog & change** | `catalog` verbs, `change get/list`; `change create` (P2) | Ordering works for opted-in items |
 | **M5 Hardening** | Signed policy, redaction hook, release signing, harness skill doc | Security review sign-off; skill doc generated and tested with Hermes |
 
@@ -352,7 +352,7 @@ Applies to this repository only; the four Go repositories in the set (`agent-okt
 | ID | Target | Build | Artifact |
 |---|---|---|---|
 | REL-1a | **macOS, Apple silicon** | `darwin/arm64` | `.tar.gz` containing the `snow` binary, signed and notarized with an Apple Developer ID ⚠️ (see 15.8 item 1). |
-| REL-1b | **Windows via WSL** | `linux/amd64` (and `linux/arm64` for WSL on Arm, see 15.8) | `.tar.gz`; WSL runs Linux binaries, so **this is the Linux build** and no native Windows `.exe` is produced. Native Windows is not a target. |
+| REL-1b | **Windows via WSL2** | `linux/amd64` (and `linux/arm64` for WSL on Arm, see 15.8) | `.tar.gz`; WSL runs Linux binaries, so **this is the Linux build** and no native Windows `.exe` is produced. Native Windows is not a target. |
 | REL-1c | **Linux, AWS-hosted container** | `linux/amd64` and `linux/arm64` (Graviton) | Multi-arch **OCI image** `ghcr.io/stainedhead/snow-cli:vX.Y.Z`, non-root, minimal base, plus the same Linux binaries as `.tar.gz` |
 
 Common to all targets:
