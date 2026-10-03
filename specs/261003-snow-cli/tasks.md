@@ -1,6 +1,6 @@
 # Tasks: snow-cli (2026-10-03) - Status: Planning
 
-Progress: 0/46 tasks complete
+Progress: 0/40 tasks complete
 
 Format: `ID | depends | est | owner paths | acceptance`. Every task is TEST-FIRST: commit the failing tests (red), then the implementation (green), then refactor; a task is done only when `go build ./... && go vet ./... && go test -race ./...` and `golangci-lint run` pass and domain/usecase coverage stays >= 90%. Ownership and branch rules are in plan.md section 3: a worker edits only the paths in its stream.
 

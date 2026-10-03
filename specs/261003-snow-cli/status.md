@@ -14,7 +14,7 @@ Created: 2026-10-03
 - [x] Spec created from PRD (spec.md)
 - [x] Research questions identified (research.md)
 - [x] Phase files initialized
-- [ ] Spec review (dev-flow step 2)
+- [x] Spec review (dev-flow step 2), tasks and plan revised, core v0.1.0 API verified
 
 ## Blockers
 None.
