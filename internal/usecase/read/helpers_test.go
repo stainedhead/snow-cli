@@ -26,7 +26,6 @@ type policyGuard struct {
 	t        *testing.T
 	eng      *policy.Engine
 	Requests []policy.Request
-	allowed  []string
 }
 
 var _ usecase.Guard = (*policyGuard)(nil)
@@ -147,15 +146,6 @@ func exitOf(t *testing.T, err error) output.ExitCode {
 		t.Fatal("expected an error")
 	}
 	return output.ExitOf(err)
-}
-
-func keys(m map[string]any) string {
-	var ks []string
-	for k := range m {
-		ks = append(ks, k)
-	}
-	sort.Strings(ks)
-	return strings.Join(ks, ",")
 }
 
 func sorted(s []string) []string {
