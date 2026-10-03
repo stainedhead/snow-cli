@@ -80,7 +80,7 @@ func TestInjectionTextIsMarkedInJSONAndContainedInText(t *testing.T) {
 	if err := output.Write(&txt, output.Success(data, nil), output.Options{Format: output.FormatText}); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(txt.String(), "<<<END UNTRUSTED>>>") != 2 { // one per untrusted field; the planted one is neutralised
+	if strings.Count(txt.String(), "<<<END UNTRUSTED>>>") != 3 { // one closer per untrusted field (short_description, description, work_notes); the planted one is neutralised
 		t.Errorf("planted delimiter must not close a block:\n%s", txt.String())
 	}
 }
