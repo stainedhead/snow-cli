@@ -71,3 +71,10 @@ func TestTablePath(t *testing.T) {
 		t.Errorf("StatsPath = %q", got)
 	}
 }
+
+// ASSUMPTION A-11: count uses the Aggregate API at /api/now/v1/stats/{table}.
+func TestAssumptionA11AggregatePathForCount(t *testing.T) {
+	if StatsPath("cmdb_ci") != "/api/now/v1/stats/cmdb_ci" {
+		t.Error("stats path drifted")
+	}
+}

@@ -227,3 +227,10 @@ func deref(p *int) any {
 	}
 	return *p
 }
+
+// ASSUMPTION A-01: the OOB scale is 1=High, 2=Medium, 3=Low.
+func TestAssumptionA01DefaultScaleIsOutOfBox(t *testing.T) {
+	if s := DefaultScale(); s != (Scale{High: 1, Medium: 2, Low: 3}) {
+		t.Errorf("default scale = %+v", s)
+	}
+}

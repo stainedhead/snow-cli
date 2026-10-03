@@ -221,3 +221,25 @@ func TestLoadAndPathResolution(t *testing.T) {
 		t.Errorf("default: %q", got)
 	}
 }
+
+// ASSUMPTION A-05: the human token sent to ServiceNow defaults to the access token.
+func TestAssumptionA05TokenTypeDefaultsToAccess(t *testing.T) {
+	c, err := Parse([]byte("profiles:\n  h:\n    mode: human\n    instance:\n      host: a.example.com\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := c.Resolve("h", noEnv)
+	if err != nil || p.Okta.TokenType != "access" {
+		t.Errorf("token type = %q err=%v", p.Okta.TokenType, err)
+	}
+}
+
+// ASSUMPTION A-02: the whoami path is configurable with a documented default.
+func TestAssumptionA02WhoamiPathDefault(t *testing.T) {
+	c, _ := Parse([]byte("profiles:\n  a:\n    mode: agent\n    instance:\n      host: a.example.com\n    whoami:\n      path: /api/custom/whoami\n  b:\n    mode: agent\n    instance:\n      host: a.example.com\n"))
+	a, _ := c.Resolve("a", noEnv)
+	b, _ := c.Resolve("b", noEnv)
+	if a.Whoami.Path != "/api/custom/whoami" || b.Whoami.Path != DefaultWhoamiPath {
+		t.Errorf("paths = %q %q", a.Whoami.Path, b.Whoami.Path)
+	}
+}

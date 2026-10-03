@@ -3,13 +3,15 @@ package whoami
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/stainedhead/agent-cli-core/policy"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/policymap"
 	"github.com/stainedhead/snow-cli/internal/usecase"
 )
+
+// statusOK is the HTTP status recorded in the audit outcome on success.
+const statusOK = 200
 
 // Service resolves and describes the caller.
 type Service struct {
@@ -35,7 +37,7 @@ func (s Service) Execute(ctx context.Context) (domain.Identity, error) {
 		id.Instance, id.Profile, id.Mode = s.Instance, s.Profile, s.Mode
 		id.AgentID, id.RunID = s.AgentID, s.RunID
 		out = id
-		return http.StatusOK, nil
+		return statusOK, nil
 	})
 	if err != nil {
 		return domain.Identity{}, err

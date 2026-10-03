@@ -283,3 +283,15 @@ func TestStatusHelperOnErrors(t *testing.T) {
 		t.Error("hints must be set")
 	}
 }
+
+// ASSUMPTION A-03: ACL-hidden records appear as 404 (exit 5), not 403.
+func TestAssumptionA03ACLHiddenRecordIs404ExitFive(t *testing.T) {
+	f := snfake.New(t)
+	// Unscripted routes answer like ServiceNow does for an ACL-hidden record.
+	c := newClient(t, f, authtest.Valid)
+	_, err := get(c, "/api/now/v1/table/incident/0123456789abcdef0123456789abcdef")
+	var nf *sn.NotFoundError
+	if !errors.As(err, &nf) || output.ExitOf(err) != output.ExitNotFound {
+		t.Errorf("err = %v", err)
+	}
+}
