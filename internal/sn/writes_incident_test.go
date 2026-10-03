@@ -16,8 +16,7 @@ import (
 )
 
 const (
-	incPath = "/api/now/v1/table/incident"
-	incID   = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	incID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 )
 
 func createIn() usecase.IncidentCreate {
