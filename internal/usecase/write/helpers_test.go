@@ -66,3 +66,9 @@ var errBoom = errors.New("boom")
 func rec(fields map[string]string) domain.Record {
 	return domain.Record{Table: "incident", Fields: fields}
 }
+
+const denyAll = `
+version: 1
+rules:
+  - {id: none, effect: deny, verbs: ["*"], resources: ["*"]}
+`

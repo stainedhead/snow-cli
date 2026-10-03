@@ -12,15 +12,15 @@ import (
 )
 
 type fakeIncidents struct {
-	found                *domain.Record
-	findErr, createErr   error
-	findCalls, createN   int
-	updates              []usecase.IncidentUpdate
-	resolves             []usecase.IncidentResolve
-	creates              []usecase.IncidentCreate
-	updateErr            error
-	foundKey             string
-	order                []string
+	found              *domain.Record
+	findErr, createErr error
+	findCalls, createN int
+	updates            []usecase.IncidentUpdate
+	resolves           []usecase.IncidentResolve
+	creates            []usecase.IncidentCreate
+	updateErr          error
+	foundKey           string
+	order              []string
 }
 
 func (f *fakeIncidents) FindByCorrelation(_ context.Context, id string) (*domain.Record, error) {
@@ -228,7 +228,7 @@ rules:
 
 func TestCreatePolicyDenied(t *testing.T) {
 	w := &fakeIncidents{}
-	_, err := svc(mustPolicy(t, "version: 1\nrules: []\n"), w).Create(context.Background(), goodCreate())
+	_, err := svc(mustPolicy(t, denyAll), w).Create(context.Background(), goodCreate())
 	wantCategory(t, err, output.CategoryPolicyDenied)
 	if w.createN+w.findCalls != 0 {
 		t.Fatal("denied create must not touch the writer")
@@ -329,7 +329,7 @@ func TestUpdateConfirmAndDenied(t *testing.T) {
 	if _, err := s.Update(context.Background(), "INC1", map[string]string{"state": "2"}); err != errBoom || len(w.updates) != 0 {
 		t.Fatalf("%v", err)
 	}
-	_, err := svc(mustPolicy(t, "version: 1\nrules: []\n"), w).Update(context.Background(), "INC1", map[string]string{"state": "2"})
+	_, err := svc(mustPolicy(t, denyAll), w).Update(context.Background(), "INC1", map[string]string{"state": "2"})
 	wantCategory(t, err, output.CategoryPolicyDenied)
 }
 

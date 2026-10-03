@@ -116,7 +116,7 @@ func TestOrderLookupErrors(t *testing.T) {
 func TestOrderDeniedConfirmDryRunExplicitKey(t *testing.T) {
 	o := &fakeOrders{}
 	vars := map[string]string{"model": "x1"}
-	_, err := orderSvc(mustPolicy(t, "version: 1\nrules: []\n"), o).Order(context.Background(), "L", vars)
+	_, err := orderSvc(mustPolicy(t, denyAll), o).Order(context.Background(), "L", vars)
 	wantCategory(t, err, output.CategoryPolicyDenied)
 
 	s := orderSvc(mustPolicy(t, allowAll), o)

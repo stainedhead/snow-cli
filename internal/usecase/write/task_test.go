@@ -135,7 +135,7 @@ func TestTaskErrorsAndModes(t *testing.T) {
 	if _, err := s.Update(ctx, "SCTASK1", f); err != errBoom || len(ft.updates) != 0 {
 		t.Fatalf("confirm: %v", err)
 	}
-	_, err := taskSvc(mustPolicy(t, "version: 1\nrules: []\n"), ft).Update(ctx, "SCTASK1", f)
+	_, err := taskSvc(mustPolicy(t, denyAll), ft).Update(ctx, "SCTASK1", f)
 	wantCategory(t, err, output.CategoryPolicyDenied)
 	ft.updateErr = errBoom
 	if _, err := taskSvc(mustPolicy(t, allowAll), ft).Update(ctx, "SCTASK1", f); err != errBoom {
