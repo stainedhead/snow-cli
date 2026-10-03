@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -203,9 +204,8 @@ func ValidateHost(h string) (string, error) {
 		}
 	}
 	if _, port, ok := strings.Cut(lower, ":"); ok {
-		var n int
-		fmt.Sscanf(port, "%d", &n)
-		if n < 1 || n > 65535 {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
 			return "", errf("invalid instance host %q: port out of range", h)
 		}
 	}
