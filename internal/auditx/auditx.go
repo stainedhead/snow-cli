@@ -84,8 +84,8 @@ func decisionLabel(d policy.Decision) string {
 	return "deny"
 }
 
-// statuser is implemented by errors that know their HTTP status.
-type statuser interface{ HTTPStatus() int }
+// hasStatus is implemented by errors that know their HTTP status.
+type hasStatus interface{ HTTPStatus() int }
 
 // Run implements usecase.Guard.
 func (g *Guard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
@@ -123,7 +123,7 @@ func (g *Guard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 	status, err := fn(ctx, d)
 	rec.Duration = now().Sub(start)
 	rec.HTTPStatus = status
-	var se statuser
+	var se hasStatus
 	if status == 0 && errors.As(err, &se) {
 		rec.HTTPStatus = se.HTTPStatus()
 	}
