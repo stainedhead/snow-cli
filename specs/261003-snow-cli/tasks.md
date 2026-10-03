@@ -1,6 +1,6 @@
 # Tasks: snow-cli (2026-10-03) - Status: Planning
 
-Progress: 10/40 tasks complete
+Progress: 11/40 tasks complete
 
 Format: `ID | depends | est | owner paths | acceptance`. Every task is TEST-FIRST: commit the failing tests (red), then the implementation (green), then refactor; a task is done only when `go build ./... && go vet ./... && go test -race ./...` and `golangci-lint run` pass and domain/usecase coverage stays >= 90%. Ownership and branch rules are in plan.md section 3: a worker edits only the paths in its stream.
 
@@ -18,7 +18,7 @@ Shared files (go.mod, Makefile, internal/cli/root.go, cmd/snow/main.go, ports.go
 - [x] A8 CLI router, global flags, render helper (output.Write), exit mapping, per-area Register stubs (read, write, auth, selftest, skill) (FR-003..005) | A3 | 3h | internal/cli | envelope golden tests; unknown flag exit 2
 - [x] A9 composition root + `newDaemonClient()` stub (auth.UnreachableError, exit 3 naming socket) + `newKeychain()` placeholder (FR-016) | A5,A7,A8 | 2h | cmd/snow, internal/app, internal/agentauth | exit-3 test with authtest.Fake and stub
 - [x] A10 `snow version` + `whoami` (FR-001, FR-010) | A9 | 1h | internal/cli | tests
-- A-GATE freeze: build/vet/race/lint/cover green; record freeze SHA in status.md; create worker branches | A1-A10 | 0.5h | status.md | gate checklist ticked
+- [x] A-GATE freeze: build/vet/race/lint/cover green; record freeze SHA in status.md; create worker branches (branches are created by the orchestrator from the recorded SHA, not by the WS-A worker) | A1-A10 | 0.5h | status.md | gate checklist ticked
 
 ## WS-B Read path (parallel; branch feat/snow-cli-ws-b; owns usecase/read, sn/tables_*.go, cli/cmd_read.go, testdata/fixtures/read)
 - B1 table get/list/count (FR-020..022) | A-GATE | 3h | acceptance: fixtures + policy check per call
