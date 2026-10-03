@@ -32,7 +32,7 @@ func TestCIWorkflowShape(t *testing.T) {
 			t.Errorf("ci.yml uses secret %s", m[1])
 		}
 	}
-	if strings.Contains(s, "windows") || strings.Contains(s, "write") && strings.Contains(s, ": write") {
+	if strings.Contains(s, "goos: windows") || strings.Contains(s, ": write") {
 		t.Error("ci.yml must not build windows or request write permissions")
 	}
 	// Every third-party action is pinned to a version.
