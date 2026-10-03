@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/stainedhead/agent-cli-core/output"

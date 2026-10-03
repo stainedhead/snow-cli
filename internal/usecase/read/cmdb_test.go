@@ -277,3 +277,34 @@ func TestAppAmbiguousAcrossTables(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// ASSUMPTION(unverified against a real instance): B-A3, dot-walked fields in sysparm_fields name the related CIs.
+func TestAssumptionRelationshipNamesComeFromDotWalkedFields(t *testing.T) {
+	ft := cmdbTables(chain()...)
+	if _, err := svc(t, ft, newGuard(t, allowAll)).CIRelated(context.Background(), sid1, "down", 1); err != nil {
+		t.Fatal(err)
+	}
+	var fields []string
+	for _, q := range ft.lists {
+		if q.Table == "cmdb_rel_ci" {
+			fields = q.Fields
+		}
+	}
+	got := strings.Join(fields, ",")
+	for _, want := range []string{"parent.name", "child.name", "child.sys_class_name", "type.name"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("relationship read lacks %s: %s", want, got)
+		}
+	}
+}
+
+// ASSUMPTION(unverified against a real instance): B-A4, CI classes are recognised by the cmdb_ci name prefix.
+func TestAssumptionCIClassRecognisedByNamePrefix(t *testing.T) {
+	s := svc(t, cmdbTables(), newGuard(t, allowAll))
+	if _, err := s.CISearch(context.Background(), "cmdb_ci_win_server", read.ListOptions{}); err != nil {
+		t.Errorf("cmdb_ci_* must be accepted: %v", err)
+	}
+	if _, err := s.CISearch(context.Background(), "u_custom_ci", read.ListOptions{}); exitOf(t, err) != output.ExitValidation {
+		t.Error("a class without the prefix is refused until the class hierarchy cache exists")
+	}
+}
