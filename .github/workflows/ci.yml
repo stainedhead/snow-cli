@@ -106,7 +106,6 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          # Linux targets are static. The darwin build runs natively on an Apple-silicon
-          # runner with cgo left on, because Keychain-backed code may need it.
-          CGO_ENABLED: ${{ matrix.goos == 'linux' && '0' || '1' }}
+          # NFR-005: all targets are static builds.
+          CGO_ENABLED: '0'
         run: go build ./...

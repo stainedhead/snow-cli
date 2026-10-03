@@ -1,0 +1,15 @@
+# Requests to agent-cli-core
+
+`snow` pins `agent-cli-core v0.1.0` and never edits it. Each item is a gap found while reading the core or implementing the spec, with the workaround used here. Open them against the core repository; none block the build.
+
+| ID | Request | Workaround in snow |
+|---|---|---|
+| CR-01 | Shared write counter: a rate limit that counts only mutating verbs across rules (PRD `max_writes_per_run`). A global `rate_limit.per_run` also counts reads. | `rate_limit.per_run: 10` on each write rule (`incident-update`, `task-update`, `catalog-order-dry-run`) and `per_hour: 5` plus `per_run: 10` on `incident-create`. An agent can therefore do more than 10 writes in total. |
+| CR-02 | Required-field rule: a policy construct stating fields that must be present on a create (`incident.create.require`). | `snow` validates required flags before the policy check (exit 9). The policy cannot enforce it for other callers. |
+| CR-03 | Offset base for truncation: `meta.next_offset` is an index into the returned items of this page, not an absolute offset (R-05, D-h). Ask for an `OffsetBase` option on `output.Bounds`. | `snow` also returns an absolute `data.page.next_offset`, and documents that the next call is `previous offset + meta.next_offset` when core truncated. |
+| CR-04 | Truncation of object data containing an `items` array (R-04): core drops items only from top-level arrays and cuts strings; an object is not truncated, so `{items: [...]}` can exceed `--max-bytes`. Ask for a way to name the array to bound, or for nested-array truncation. | `snow` trims `items` to the byte budget itself and sets `meta.truncated`. |
+| CR-05 | `policy.DeniedError` does not implement `output.CategoryError`, so `output.FromError` maps it to a general error. Ask for the category (`policy_denied`, exit 6) to be carried by the type. | `internal/sn` adapts `*policy.DeniedError` through a small wrapper (`AdaptPolicyError`). |
+| CR-06 | `httpx.Config.Redactor` takes a core-internal type that callers outside the module cannot construct. | Left nil; `snow` never puts tokens or bodies in errors and tests grep for planted token strings. |
+| CR-07 | `audit.Record` has fixed fields and no "pending" state; `pending` is an `Outcome` label. Ask for a first-class pending/outcome pair or a documented convention. | The guard writes a record with `Outcome: "pending"` before a write and a second record after it. |
+| CR-08 | `httpx` does not classify some 5xx statuses (500, 501, 505); only 429, 502, 503, 504 are retried and mapped. Ask for a documented, configurable mapping to `rate_limited`. | `internal/sn` maps the remaining 5xx to `*httpx.RateLimitedError{Attempts: 1}` (exit 8) so the spec table holds. |
+| CR-09 | `selftest` failure semantics: a failing matrix is a general failure (exit 1), not a category 4 or 6, and per-row detail is only in the message. Ask for structured per-row results in the envelope. | `snow selftest` returns the core result; row detail is read from the failure message. |
