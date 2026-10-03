@@ -24,6 +24,11 @@ agent host: harness (Hermes / CLI) in a container
    -> AWS / GitHub / ServiceNow / M365 / Atlassian
 ```
 
+Okta's reach differs by system. ServiceNow validates the Okta token directly, so Okta does gate
+`snow`. For GitHub and Microsoft 365 the agent is a real user account, gated by that account's state
+plus the daemon's custody of its credential, and Atlassian uses a key that is not bound to Okta
+(`agent-okta-d-PRD.md` §13, §15). "Secured with Okta" does not mean identical guarantees everywhere.
+
 Identity is **per agent and attributable**. Each agent has its own Okta identity, which ServiceNow
 maps to its own `sys_user`. Every action is therefore traceable to one agent, every write can be
 attributed and retried safely, and access can be cut off for that one agent. The agent holds no
