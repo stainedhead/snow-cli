@@ -106,7 +106,8 @@ func TestFactoryBuildsEnv(t *testing.T) {
 		env.Clock == nil || env.IDs == nil || env.Keychain != nil {
 		t.Errorf("env = %+v", env)
 	}
-	if env.IDs.NewID() == env.IDs.NewID() || len(env.IDs.NewID()) < 16 {
+	id1, id2 := env.IDs.NewID(), env.IDs.NewID()
+	if id1 == id2 || len(id1) < 16 {
 		t.Error("IDs must be unique")
 	}
 	if env.Clock.Now().IsZero() {

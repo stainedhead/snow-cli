@@ -155,7 +155,7 @@ func build(o Options, g cli.GlobalFlags) (*built, error) {
 		Clock:    clock{}, IDs: ids,
 		Guard: &auditx.Guard{
 			Engine: policy.NewEngine(pol, nil), Sink: lg, Tool: "snow", AgentID: agentID, RunID: runID, Path: auditPath,
-			OnWarn: func(err error) { fmt.Fprintf(o.Stderr, "warning: %v\n", err) },
+			OnWarn: func(err error) { _, _ = fmt.Fprintf(o.Stderr, "warning: %v\n", err) },
 		},
 		Limits: pol.Limits,
 		In:     o.Stdin, Err: o.Stderr,

@@ -5,7 +5,7 @@ Created: 2026-10-03
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Spec creation | In Progress |
-| 1 | WS-A Foundation | In Progress (A1-A8 done; A9, A10, A-GATE pending) |
+| 1 | WS-A Foundation | In Progress (A1-A10 done; A-GATE pending) |
 | 2 | WS-B/C/D/E parallel workstreams | Not Started |
 | 3 | Integration and docs | Not Started |
 | 4 | Review and hardening | Not Started |
