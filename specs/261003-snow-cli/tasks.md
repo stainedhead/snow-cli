@@ -1,6 +1,6 @@
 # Tasks: snow-cli (2026-10-03) - Status: Planning
 
-Progress: 0/40 tasks complete
+Progress: 8/40 tasks complete
 
 Format: `ID | depends | est | owner paths | acceptance`. Every task is TEST-FIRST: commit the failing tests (red), then the implementation (green), then refactor; a task is done only when `go build ./... && go vet ./... && go test -race ./...` and `golangci-lint run` pass and domain/usecase coverage stays >= 90%. Ownership and branch rules are in plan.md section 3: a worker edits only the paths in its stream.
 
@@ -8,14 +8,14 @@ Format: `ID | depends | est | owner paths | acceptance`. Every task is TEST-FIRS
 Shared files (go.mod, Makefile, internal/cli/root.go, cmd/snow/main.go, ports.go) are WS-A-owned and frozen after gate A-GATE. Need a change? Append to implementation-notes.md and stop; do not edit.
 
 ## WS-A Foundation (serial; one worker; branch feat/snow-cli directly)
-- A1 go.mod (module github.com/stainedhead/snow-cli, go 1.27, require agent-cli-core v0.1.0), Makefile (build test race vet lint cover skill), .golangci.yml check | - | 1h | go.mod, Makefile | `go build ./...` green; no replace/pseudo-version (test greps go.mod)
-- A2 testsupport fakes: `internal/testsupport/snfake` (httptest ServiceNow: fixture JSON, status/latency/header fault injection, POST counter, X-Total-Count) and `oktafake` skeleton | A1 | 3h | internal/testsupport/** | self-tests for fault injection and POST counter
-- A3 domain types (SysID, Number, Page, Record, scale) + usecase ports (`ports.go`: TableReader, CatalogReader, IncidentWriter, TaskWriter, OrderWriter, Identity, Clock, IDGen) | A1 | 2h | internal/domain, internal/usecase/ports.go | table-driven validation tests
-- A4 config loader + host validation (FR-002, D-a): strict YAML, profiles, rejects scheme/path/userinfo/wildcard hosts, unknown keys exit 2 | A1 | 2h | internal/config | strict-parse tests incl. SNOW_INSTANCE_HOST precedence
-- A5 sn client + httpx wiring (AllowedHosts, Refresher=auth.Authorizer) + status map to CategoryError (FR-006, D-b) + policy-denial adapter (DeniedError -> policy_denied) | A2,A4 | 4h | internal/sn | every status row of D-b tested against snfake; passthrough of core Forbidden/Auth/RateLimited asserted; redirect to other host -> exit 4
-- A6 policymap vocabulary (verb/resource constants, D-f) + builder skeleton | A3 | 1h | internal/policymap | vocabulary table test
-- A7 auditx Block/Warn wiring, pending/outcome records via `audit.Record.Outcome` (D-c) | A1 | 2h | internal/auditx | failing-writer test: Block aborts before HTTP; outcome-write failure joined with result
-- A8 CLI router, global flags, render helper (output.Write), exit mapping, per-area Register stubs (read, write, auth, selftest, skill) (FR-003..005) | A3 | 3h | internal/cli | envelope golden tests; unknown flag exit 2
+- [x] A1 go.mod (module github.com/stainedhead/snow-cli, go 1.27, require agent-cli-core v0.1.0), Makefile (build test race vet lint cover skill), .golangci.yml check | - | 1h | go.mod, Makefile | `go build ./...` green; no replace/pseudo-version (test greps go.mod)
+- [x] A2 testsupport fakes: `internal/testsupport/snfake` (httptest ServiceNow: fixture JSON, status/latency/header fault injection, POST counter, X-Total-Count) and `oktafake` skeleton | A1 | 3h | internal/testsupport/** | self-tests for fault injection and POST counter
+- [x] A3 domain types (SysID, Number, Page, Record, scale) + usecase ports (`ports.go`: TableReader, CatalogReader, IncidentWriter, TaskWriter, OrderWriter, Identity, Clock, IDGen) | A1 | 2h | internal/domain, internal/usecase/ports.go | table-driven validation tests
+- [x] A4 config loader + host validation (FR-002, D-a): strict YAML, profiles, rejects scheme/path/userinfo/wildcard hosts, unknown keys exit 2 | A1 | 2h | internal/config | strict-parse tests incl. SNOW_INSTANCE_HOST precedence
+- [x] A5 sn client + httpx wiring (AllowedHosts, Refresher=auth.Authorizer) + status map to CategoryError (FR-006, D-b) + policy-denial adapter (DeniedError -> policy_denied) | A2,A4 | 4h | internal/sn | every status row of D-b tested against snfake; passthrough of core Forbidden/Auth/RateLimited asserted; redirect to other host -> exit 4
+- [x] A6 policymap vocabulary (verb/resource constants, D-f) + builder skeleton | A3 | 1h | internal/policymap | vocabulary table test
+- [x] A7 auditx Block/Warn wiring, pending/outcome records via `audit.Record.Outcome` (D-c) | A1 | 2h | internal/auditx | failing-writer test: Block aborts before HTTP; outcome-write failure joined with result
+- [x] A8 CLI router, global flags, render helper (output.Write), exit mapping, per-area Register stubs (read, write, auth, selftest, skill) (FR-003..005) | A3 | 3h | internal/cli | envelope golden tests; unknown flag exit 2
 - A9 composition root + `newDaemonClient()` stub (auth.UnreachableError, exit 3 naming socket) + `newKeychain()` placeholder (FR-016) | A5,A7,A8 | 2h | cmd/snow, internal/app, internal/agentauth | exit-3 test with authtest.Fake and stub
 - A10 `snow version` + `whoami` (FR-001, FR-010) | A9 | 1h | internal/cli | tests
 - A-GATE freeze: build/vet/race/lint/cover green; record freeze SHA in status.md; create worker branches | A1-A10 | 0.5h | status.md | gate checklist ticked
