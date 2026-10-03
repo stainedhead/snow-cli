@@ -14,6 +14,11 @@ PRD section 5 defines the shared `agent-cli-core` Go module (auth, policy, outpu
 
 ## Layout
 
+Doc routing: a shift in goal, direction or scope goes in [INTENT.md](INTENT.md) (why and where the tool fits); requirements go in the PRD; contributor rules go here.
+
+- `INTENT.md` - purpose, wider context, goals, non-goals, scope boundary
+- `snow-cli-PRD.md` - product requirements (the how)
+
 Planned Go layout (from PRD section 4; create directories only when code needs them):
 
 - `cmd/snow/` - binary entry point

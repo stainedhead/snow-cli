@@ -4,6 +4,8 @@
 
 **Status: Draft PRD (v0.1), no implementation yet.** This repository currently holds the PRD and project scaffolding.
 
+For the purpose, wider context (Okta-secured agent access) and scope boundary, see [INTENT.md](INTENT.md).
+
 ## Why
 
 There is no suitable stock CLI for this: ServiceNow's own `now-sdk` targets application development. The PRD proposes a thin purpose-built CLI instead.
@@ -50,6 +52,7 @@ Package placement depends on the `agent-cli-core` decision above.
 
 ## Documentation
 
+- [INTENT.md](INTENT.md) - why this tool exists and where it fits in the set
 - [snow-cli-PRD.md](snow-cli-PRD.md) - the product requirements document
 - [AGENTS.md](AGENTS.md) - contributor and agent rules
 - [docs/](docs/) - product and technical docs
