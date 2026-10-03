@@ -1,0 +1,146 @@
+# snow agent policy (client-side guardrail, not a security control).
+#
+# ServiceNow roles and ACLs are the security boundary; this file narrows what
+# the CLI will attempt and explains denials early. It is written in the
+# agent-cli-core strict policy schema (version 1) and is NOT the PRD section 9
+# sketch (see spec D-f). Rules are evaluated by agent-cli-core: a matching
+# deny rule always wins; otherwise the first allow rule whose field allowlist
+# and constraints the request satisfies decides; anything unmatched is denied.
+#
+# Vocabulary: verbs get, list, count, search, related, create, update, resolve,
+# order, vars, whoami, selftest. Resources table:<name>, cmdb:ci, cmdb:app,
+# incident, request, ritm, task, change, problem, catalog:item:<sys_id>,
+# catalog:search, whoami, selftest.
+#
+# Read allowlists include sys_id, sys_mod_count and the correlation fields
+# beyond the PRD sketch because the use cases need them (get by sys_id, the
+# optimistic-concurrency guard, the dedupe query).
+version: 1
+limits:
+  max_results: 200
+  max_bytes: 32768
+
+rules:
+  # ---- Deny first (deny always wins in the core engine) ----
+  - id: deny-sys-tables
+    effect: deny
+    verbs: ["*"]
+    resources: ["table:sys_*", "table:sysapproval_approver"]
+
+  # Agents never resolve incidents (PRD 7.1 / FR-042): a human closes them.
+  - id: deny-incident-resolve
+    effect: deny
+    verbs: [resolve]
+    resources: [incident, "table:incident"]
+
+  # ---- Identity ----
+  - id: allow-whoami
+    effect: allow
+    verbs: [whoami]
+    resources: [whoami]
+  - id: allow-selftest
+    effect: allow
+    verbs: [selftest]
+    resources: [selftest]
+
+  # ---- Typed work-item reads ----
+  - id: read-incident
+    effect: allow
+    verbs: [get, list, count]
+    resources: [incident, "table:incident"]
+    fields: [number, sys_id, short_description, description, state, impact, urgency, priority, cmdb_ci, business_service, assignment_group, assigned_to, caller_id, opened_at, sys_updated_on, sys_mod_count, correlation_id, correlation_display, work_notes, comments]
+  - id: read-request
+    effect: allow
+    verbs: [get, list, count]
+    resources: [request, "table:sc_request"]
+    fields: [number, sys_id, short_description, description, state, request_state, requested_for, opened_by, opened_at, sys_updated_on, assignment_group, assigned_to]
+  - id: read-ritm
+    effect: allow
+    verbs: [get, list, count]
+    resources: [ritm, "table:sc_req_item"]
+    fields: [number, sys_id, short_description, state, stage, cat_item, request, requested_for, opened_at, sys_updated_on, assignment_group, assigned_to]
+  - id: read-task
+    effect: allow
+    verbs: [get, list, count]
+    resources: [task, "table:sc_task", "table:task"]
+    fields: [number, sys_id, short_description, description, state, priority, sys_class_name, assigned_to, assignment_group, opened_at, sys_updated_on, sys_mod_count, work_notes, comments]
+  - id: read-change
+    effect: allow
+    verbs: [get, list, count]
+    resources: [change, "table:change_request"]
+    fields: [number, sys_id, short_description, description, state, type, risk, impact, cmdb_ci, assignment_group, assigned_to, start_date, end_date, opened_at, sys_updated_on]
+  - id: read-problem
+    effect: allow
+    verbs: [get, list, count]
+    resources: [problem, "table:problem"]
+    fields: [number, sys_id, short_description, description, state, priority, cmdb_ci, assignment_group, assigned_to, opened_at, sys_updated_on]
+
+  # ---- CMDB (include_children: the cmdb_ci class hierarchy) ----
+  - id: read-cmdb-ci
+    effect: allow
+    verbs: [get, list, count, search]
+    resources: [cmdb:ci, "table:cmdb_ci*"]
+    fields: [sys_id, name, sys_class_name, short_description, operational_status, install_status, environment, owned_by, support_group, managed_by, business_criticality, location, sys_updated_on]
+  - id: read-cmdb-app
+    effect: allow
+    verbs: [get, list, search]
+    resources: [cmdb:app]
+    fields: [sys_id, name, sys_class_name, short_description, operational_status, owned_by, support_group, business_criticality, sys_updated_on]
+  - id: read-cmdb-related
+    effect: allow
+    verbs: [related, list]
+    resources: [cmdb:ci, "table:cmdb_rel_ci"]
+    fields: [sys_id, parent, child, type, sys_updated_on, name, sys_class_name]
+
+  # ---- Catalog reads ----
+  - id: catalog-search
+    effect: allow
+    verbs: [search]
+    resources: [catalog:search]
+  - id: catalog-read
+    effect: allow
+    verbs: [get, vars]
+    resources: ["catalog:item:*"]
+
+  # ---- Writes ----
+  # D-d: ServiceNow scale 1=High 2=Medium 3=Low. Agents may not set 1, so the
+  # constraint is min 2, max 3 (the PRD "max_impact_urgency: 2" is inverted).
+  # The 5-per-hour create cap is the PRD max_per_hour; per_run 10 on every
+  # write rule stands in for max_writes_per_run (no shared write counter in
+  # the core; see docs/core-change-requests.md).
+  - id: incident-create
+    effect: allow
+    mode: allow
+    verbs: [create]
+    resources: [incident]
+    fields: [short_description, description, cmdb_ci, business_service, assignment_group, impact, urgency, correlation_id, correlation_display, work_notes]
+    constraints:
+      impact:  { min: 2, max: 3 }
+      urgency: { min: 2, max: 3 }
+    rate_limit: { per_hour: 5, per_run: 10 }
+  - id: incident-update
+    effect: allow
+    mode: allow
+    verbs: [update]
+    resources: [incident]
+    fields: [work_notes, comments, short_description, description, cmdb_ci, business_service, impact, urgency, assignment_group]
+    constraints:
+      impact:  { min: 2, max: 3 }
+      urgency: { min: 2, max: 3 }
+    rate_limit: { per_run: 10 }
+  - id: task-update
+    effect: allow
+    mode: allow
+    verbs: [update]
+    resources: [task, "table:sc_task"]
+    fields: [work_notes, comments, state, assigned_to]
+    rate_limit: { per_run: 10 }
+
+  # Catalog orders preview only. To opt an item in, add a rule BEFORE this one:
+  #   - { id: order-<name>, effect: allow, mode: allow, verbs: [order], resources: ["catalog:item:<sys_id>"], rate_limit: { per_run: 10 } }
+  - id: catalog-order-dry-run
+    effect: allow
+    mode: dry_run_only
+    verbs: [order]
+    resources: ["catalog:item:*"]
+    rate_limit: { per_run: 10 }
