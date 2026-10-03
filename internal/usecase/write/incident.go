@@ -50,6 +50,12 @@ func (s IncidentService) validateCreate(in CreateInput) error {
 		return invalid("--ci or --app is required")
 	}
 	sc := s.scale()
+	if in.Impact == 0 {
+		return invalid("--impact is required (%d high, %d medium, %d low)", sc.High, sc.Medium, sc.Low)
+	}
+	if in.Urgency == 0 {
+		return invalid("--urgency is required (%d high, %d medium, %d low)", sc.High, sc.Medium, sc.Low)
+	}
 	if !sc.Contains(in.Impact) {
 		return invalid("--impact %d is not on the instance scale (%d high, %d medium, %d low)", in.Impact, sc.High, sc.Medium, sc.Low)
 	}
