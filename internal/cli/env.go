@@ -27,6 +27,9 @@ type BuildInfo struct {
 type Env struct {
 	Mode    domain.Mode
 	Profile config.Resolved
+	// AgentID and RunID attribute audit records and provenance.
+	AgentID string
+	RunID   string
 
 	Tables    usecase.TableReader
 	Catalog   usecase.CatalogReader

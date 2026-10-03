@@ -192,4 +192,3 @@ func TestDefaultAuditPathUnderHome(t *testing.T) {
 		t.Errorf("default audit path = %q", got)
 	}
 }
-
