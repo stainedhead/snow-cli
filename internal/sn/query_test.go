@@ -55,7 +55,7 @@ func TestTableParamsNoOrder(t *testing.T) {
 	if v.Get("sysparm_query") != "a=b" {
 		t.Errorf("query = %q", v.Get("sysparm_query"))
 	}
-	if TableParams{NoOrder: true}.Values().Has("sysparm_query") {
+	if (TableParams{NoOrder: true}).Values().Has("sysparm_query") {
 		t.Error("empty query without order must be omitted")
 	}
 }

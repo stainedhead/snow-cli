@@ -79,9 +79,9 @@ func TestStatusMap(t *testing.T) {
 
 func TestPassthroughOfCoreErrorsIsUnmapped(t *testing.T) {
 	f := snfake.New(t)
-	f.On("GET", "/p", snfake.Error(403, "x"))
+	f.On("GET", "/api/now/v1/p", snfake.Error(403, "x"))
 	c := newClient(t, f, authtest.Valid)
-	_, err := get(c, "/p")
+	_, err := get(c, "/api/now/v1/p")
 	var fe *httpx.ForbiddenError
 	if !errors.As(err, &fe) {
 		t.Fatalf("403 must reach the caller as the core's ForbiddenError, got %T", err)
@@ -90,20 +90,20 @@ func TestPassthroughOfCoreErrorsIsUnmapped(t *testing.T) {
 
 func TestSNErrorMessageCarriedAndBounded(t *testing.T) {
 	f := snfake.New(t)
-	f.On("POST", "/v", snfake.Error(400, "Mandatory field short_description missing"))
+	f.On("POST", "/api/now/v1/v", snfake.Error(400, "Mandatory field short_description missing"))
 	c := newClient(t, f, authtest.Valid)
-	_, err := c.Do(context.Background(), sn.Call{Method: "POST", Path: "/v", Body: map[string]string{"a": "b"}})
+	_, err := c.Do(context.Background(), sn.Call{Method: "POST", Path: "/api/now/v1/v", Body: map[string]string{"a": "b"}})
 	if err == nil || !strings.Contains(err.Error(), "Mandatory field short_description missing") {
 		t.Fatalf("err = %v", err)
 	}
-	f.On("GET", "/long", snfake.Error(404, strings.Repeat("x", 5000)))
-	_, err = get(c, "/long")
+	f.On("GET", "/api/now/v1/long", snfake.Error(404, strings.Repeat("x", 5000)))
+	_, err = get(c, "/api/now/v1/long")
 	if err == nil || len(err.Error()) > 700 {
 		t.Errorf("message not bounded: %d", len(err.Error()))
 	}
 	// hostile body that is not JSON must not be echoed
-	f.On("GET", "/html", snfake.Response{Status: 404, Body: []byte("<html>secret internal page</html>")})
-	_, err = get(c, "/html")
+	f.On("GET", "/api/now/v1/html", snfake.Response{Status: 404, Body: []byte("<html>secret internal page</html>")})
+	_, err = get(c, "/api/now/v1/html")
 	if err == nil || strings.Contains(err.Error(), "secret internal page") {
 		t.Errorf("non-JSON error bodies must not be echoed: %v", err)
 	}
@@ -111,9 +111,9 @@ func TestSNErrorMessageCarriedAndBounded(t *testing.T) {
 
 func TestSNErrorMessageIsScrubbed(t *testing.T) {
 	f := snfake.New(t)
-	f.On("GET", "/s", snfake.Error(400, "bad Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH"))
+	f.On("GET", "/api/now/v1/s", snfake.Error(400, "bad Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH"))
 	c := newClient(t, f, authtest.Valid)
-	_, err := get(c, "/s")
+	_, err := get(c, "/api/now/v1/s")
 	if err == nil || strings.Contains(err.Error(), "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH") {
 		t.Errorf("credential leaked in message: %v", err)
 	}
@@ -130,13 +130,13 @@ func TestSuccessParsesTotalAndBody(t *testing.T) {
 	if r.Status != 200 || r.Total == nil || *r.Total != 42 || !strings.Contains(string(r.Body), "INC1") {
 		t.Errorf("response = %+v", r)
 	}
-	f.On("GET", "/nototal", snfake.Response{Status: 200, JSON: map[string]any{"result": []any{}}})
-	r, _ = get(c, "/nototal")
+	f.On("GET", "/api/now/v1/nototal", snfake.Response{Status: 200, JSON: map[string]any{"result": []any{}}})
+	r, _ = get(c, "/api/now/v1/nototal")
 	if r.Total != nil {
 		t.Error("absent X-Total-Count must be nil")
 	}
-	f.On("GET", "/badtotal", snfake.Response{Status: 200, JSON: map[string]any{}, Header: map[string]string{"X-Total-Count": "abc"}})
-	r, _ = get(c, "/badtotal")
+	f.On("GET", "/api/now/v1/badtotal", snfake.Response{Status: 200, JSON: map[string]any{}, Header: map[string]string{"X-Total-Count": "abc"}})
+	r, _ = get(c, "/api/now/v1/badtotal")
 	if r.Total != nil {
 		t.Error("unparseable X-Total-Count must be nil")
 	}
