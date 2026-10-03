@@ -1,0 +1,89 @@
+# snow human policy (client-side guardrail, not a security control).
+#
+# ServiceNow roles and ACLs are the security boundary; this file narrows what
+# the CLI will attempt and explains denials early. It is written in the
+# agent-cli-core strict policy schema (version 1) and is NOT the PRD section 9
+# sketch (see spec D-f). Rules are evaluated by agent-cli-core: a matching
+# deny rule always wins; otherwise the first allow rule whose field allowlist
+# and constraints the request satisfies decides; anything unmatched is denied.
+#
+# Vocabulary: verbs get, list, count, search, related, create, update, resolve,
+# order, vars, whoami, selftest. Resources table:<name>, cmdb:ci, cmdb:app,
+# incident, request, ritm, task, change, problem, catalog:item:<sys_id>,
+# catalog:search, whoami, selftest.
+#
+# Read allowlists include sys_id, sys_mod_count and the correlation fields
+# beyond the PRD sketch because the use cases need them (get by sys_id, the
+# optimistic-concurrency guard, the dedupe query).
+version: 1
+limits:
+  max_results: 500
+  max_bytes: 65536
+
+# Humans run under their own ServiceNow identity and roles. Reads cover any
+# non-sys table; writes ask for interactive confirmation in the CLI (--yes
+# skips). Human impact/urgency may be 1 (escalation).
+rules:
+  - id: deny-sys-tables
+    effect: deny
+    verbs: ["*"]
+    resources: ["table:sys_*", "table:sysapproval_approver"]
+
+  - id: allow-whoami
+    effect: allow
+    verbs: [whoami]
+    resources: [whoami]
+  - id: allow-selftest
+    effect: allow
+    verbs: [selftest]
+    resources: [selftest]
+
+  - id: read-typed
+    effect: allow
+    verbs: [get, list, count, search, related]
+    resources: [incident, request, ritm, task, change, problem, "cmdb:*"]
+  - id: read-tables
+    effect: allow
+    verbs: [get, list, count]
+    resources: ["table:*"]
+  - id: catalog-read
+    effect: allow
+    verbs: [search, get, vars]
+    resources: [catalog:search, "catalog:item:*"]
+
+  - id: incident-create
+    effect: allow
+    mode: allow
+    verbs: [create]
+    resources: [incident]
+    fields: [short_description, description, cmdb_ci, business_service, assignment_group, impact, urgency, correlation_id, correlation_display, work_notes]
+    constraints:
+      impact:  { min: 1, max: 3 }
+      urgency: { min: 1, max: 3 }
+    rate_limit: { per_hour: 30 }
+  - id: incident-update
+    effect: allow
+    mode: allow
+    verbs: [update]
+    resources: [incident]
+    fields: [work_notes, comments, short_description, description, cmdb_ci, business_service, impact, urgency, assignment_group, assigned_to, state]
+    constraints:
+      impact:  { min: 1, max: 3 }
+      urgency: { min: 1, max: 3 }
+  - id: incident-resolve
+    effect: allow
+    mode: allow
+    verbs: [resolve]
+    resources: [incident]
+    fields: [close_code, close_notes, state]
+  - id: task-update
+    effect: allow
+    mode: allow
+    verbs: [update]
+    resources: [task, "table:sc_task"]
+    fields: [work_notes, comments, state, assigned_to]
+  - id: catalog-order
+    effect: allow
+    mode: allow
+    verbs: [order]
+    resources: ["catalog:item:*"]
