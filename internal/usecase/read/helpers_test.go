@@ -47,7 +47,7 @@ func (g *policyGuard) Run(ctx context.Context, a usecase.Action, fn usecase.Acti
 	}
 	d := g.eng.Check(a.Request)
 	if !d.Allowed {
-		return d.Err()
+		return denied{d.Err()}
 	}
 	_, err := fn(ctx, d)
 	return err
@@ -114,7 +114,7 @@ func (f *fakeTables) Count(_ context.Context, table, q string) (int, error) {
 
 type notFound struct{}
 
-func (notFound) Error() string                 { return "not found" }
+func (notFound) Error() string             { return "not found" }
 func (notFound) Category() output.Category { return output.CategoryNotFound }
 
 func rec(table string, kv ...string) domain.Record {
@@ -169,3 +169,8 @@ var errBoom = errors.New("boom")
 const sid1 = "0123456789abcdef0123456789abcdef"
 const sid2 = "fedcba9876543210fedcba9876543210"
 const sid3 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+// denied mimics the adapter the real guard applies (sn.AdaptPolicyError).
+type denied struct{ error }
+
+func (denied) Category() output.Category { return output.CategoryPolicyDenied }
