@@ -328,6 +328,78 @@ Human profile keeps the same shape with broader tables, `resolve: allow`, and in
 6. Human mode: which user populations (developers, SREs) and which operating systems?
 7. Is there an existing CMDB data-quality owner for the applications agents will look up?
 
+## 15. CI/CD and release requirements
+
+Applies to this repository only; the four Go repositories in the set (`agent-okta-d`, `snow-cli`, `outlook-cli`, `teams-cli`) use the same pipeline shape so a pipeline change is made once and copied. Pipelines are GitHub Actions workflows under `.github/workflows/`. The scaffolded `ci.yml` is a starting point and must be brought in line with this section. Items marked ⚠️ are not confirmed against vendor documentation and need a spike before the pipeline depends on them.
+
+**Terminology.** *CI* verifies a change. *CD* produces and publishes a **release**: a semver-versioned set of signed artifacts. **Publishing a release is the whole of "deploy" in this section.** Rolling a release out to agent hosts, harness images or AWS accounts is the swarm owner's job (see REL-12).
+
+### 15.1 Continuous integration
+
+| ID | Requirement |
+|---|---|
+| BLD-1 | CI runs on **every pull request targeting `main`** and **on demand** (`workflow_dispatch`, optionally against a chosen ref). CI also runs as the first stage of every release (REL-9), so nothing is released untested. |
+| BLD-2 | Checks: `gofmt -l .` is empty; `go mod tidy` leaves no diff; `go vet ./...`; `golangci-lint` at a pinned version; `go test -race ./...`; `govulncheck ./...`. |
+| BLD-3 | Every release target (REL-1) is **cross-compiled on each PR**, so a portability break is found before merge, not at release time. |
+| BLD-4 | PR CI needs **no credentials and no network access to real systems**: tests use fakes, mock endpoints and fake clocks. `snow selftest` (§8, §10) needs a live ServiceNow instance, so it runs **only on demand** against a sub-production instance, with short-lived credentials, never in PR CI. |
+| BLD-5 | The CI workflow is a **required status check** on `main` once branch protection is enabled. Branch protection is not configured yet; enabling it is a separate step. |
+| BLD-6 | Workflows use least privilege (`permissions: contents: read` for CI), pin the Go version from `go.mod`, and pin third-party actions to a version or commit SHA. |
+
+### 15.2 Release targets and artifacts
+
+| ID | Target | Build | Artifact |
+|---|---|---|---|
+| REL-1a | **macOS, Apple silicon** | `darwin/arm64` | `.tar.gz` containing the `snow` binary, signed and notarized with an Apple Developer ID ⚠️ (see 15.7 item 1). |
+| REL-1b | **Windows via WSL** | `linux/amd64` (and `linux/arm64` for WSL on Arm, see 15.7) | `.tar.gz`; WSL runs Linux binaries, so **this is the Linux build** and no native Windows `.exe` is produced. Native Windows is not a target. |
+| REL-1c | **Linux, AWS-hosted container** | `linux/amd64` and `linux/arm64` (Graviton) | Multi-arch **OCI image** `ghcr.io/stainedhead/snow-cli:vX.Y.Z`, non-root, minimal base, plus the same Linux binaries as `.tar.gz` |
+
+Common to all targets:
+
+- REL-2. Each release also publishes `SHA256SUMS`, an SBOM (SPDX or CycloneDX), a build-provenance attestation, and a signature for every artifact. Linux and container artifacts are signed with `cosign` keyless signing from the workflow's GitHub OIDC identity ⚠️. The install documentation in `user-docs/` states how to verify them.
+- REL-3. Builds are reproducible as far as Go allows: pinned toolchain, `-trimpath`, `CGO_ENABLED=0` where possible, and a build timestamp taken from the commit.
+- REL-4. The binary reports its version (`snow version`: semver, commit, build date), stamped with `-ldflags`. The audit log schema in §5 is not changed by this section.
+- REL-4a. `snow` is deployed into the agent's host or container, so the **tarball is the primary artifact** for baking into a harness image. The OCI image is also published so it can serve as a build stage (`COPY --from`) and for a sidecar-style run.
+
+### 15.3 Versioning
+
+| ID | Requirement |
+|---|---|
+| REL-5 | Releases follow **semantic versioning** (`MAJOR.MINOR.PATCH`). The git tag `vX.Y.Z` on `main` is the release identity. Tags are immutable: a version is never re-tagged or re-published. |
+| REL-6 | Releases start at `0.1.0` and stay `0.y.z` while this PRD is a draft. `1.0.0` is cut by an explicit decision, never automatically. |
+| REL-7 | The bump is taken from a **PR label** (`release:major`, `release:minor`, `release:patch`). An unlabeled PR that changes shipped code defaults to `patch`. A PR that touches only `docs/`, `user-docs/`, `specs/`, `*.md` or `INTENT.md` does **not** cause a release. This PRD (§5) defines the shared `agent-cli-core` module that `snow`, `outlook` and `teams` build from. If it stays in this repository it is released with the same tag, and a breaking change to it is a `major` bump; if it moves to its own repository, the three CLIs pin a released version of it. That decision is open and not made here. |
+
+### 15.4 Continuous delivery
+
+| ID | Requirement |
+|---|---|
+| REL-8 | CD runs **on merge of a pull request to `main`** and **on demand** (`workflow_dispatch` with a `bump` of `major`, `minor` or `patch`, an optional explicit `version`, and a `dry_run` option that builds and verifies but publishes nothing). |
+| REL-9 | Stages, in order: CI gate (all of 15.1), compute version, cross-build every target, package, checksum, SBOM, sign and attest, **smoke-verify**, publish. Publishing creates the tag, a GitHub Release with notes generated from merged PR titles, and pushes the container image tagged `vX.Y.Z` and `vX.Y`. No `latest` tag is relied on; consumers pin a version. |
+| REL-10 | Smoke-verify runs the built artifact before anything is published: the `linux/amd64` binary and the container image on a Linux runner, the `darwin/arm64` binary on an Apple-silicon runner. Each must run `snow version` and report the expected version. |
+| REL-11 | **All-or-nothing:** if any target fails to build, sign or verify, nothing is published. A failed run is safe to re-run, and a version is never published twice. |
+| REL-12 | CD **does not roll out** a release. It does not deploy to AWS accounts, restart daemons, or rebuild harness images. The harness images in `agentic-team-w-paperclip` are intended to consume a released artifact by pinned version ⚠️ (to be agreed with that repository), rather than build this tool from source. |
+| REL-13 | The release job gets only what it needs (`contents: write`, `packages: write`, `id-token: write`, attestations) from a protected `release` environment. Apple signing material lives only in that environment's secrets. On-demand runs require write access to the repository, and a `major` bump on demand should require a reviewer approval on the environment. No long-lived cloud credentials are stored in the repository. |
+| REL-14 | A bad release is not deleted. It is superseded by a newer patch release and marked as withdrawn in its release notes; its tags and images stay in place. |
+
+### 15.5 Repository-specific requirements
+
+- **Release contents:** the `snow` binary, the sample `agent` and `human` policy files (§5), and the generated harness skill document (`SKILL.md`, from `docgen`), which is regenerated from the command tree on every release and checked for drift in PR CI.
+- **Not released from this repo:** the ServiceNow scoped application (roles, ACLs, API access policy, `whoami` endpoint; §8). It is handed to the ServiceNow platform team and its owner is undecided (§14), so CD ships the CLI only.
+- **ServiceNow release drift:** because CMDB API role requirements change across ServiceNow releases (§13), re-running `snow selftest` after a ServiceNow upgrade is an on-demand workflow, not a gate on releasing the CLI.
+
+### 15.6 Milestone placement
+
+BLD-1 to BLD-6 are in place before the first milestone that merges Go code. The release pipeline (REL-1 to REL-14) is in place before the first tagged build, and no later than the first milestone that produces a runnable binary. Release signing and notarization may land later, in the hardening milestone, but unsigned builds are labelled pre-release until then.
+
+### 15.7 Open items (CI/CD)
+
+1. **Apple signing.** Is an Apple Developer ID and notarization account available for CD? Until it is, darwin artifacts carry only the `cosign` signature and users must clear the quarantine attribute themselves ⚠️.
+2. **Registry.** `ghcr.io` is assumed, matching `agentic-team-w-paperclip`. Should images also be pushed to Amazon ECR for the AWS-hosted container case?
+3. **What "deploy" means.** This section treats it as publishing a release (REL-12). Confirm that no automatic rollout into an AWS environment is wanted.
+4. **Version bump rule.** PR labels are assumed (REL-7). Conventional commits are the alternative.
+5. **WSL on Arm.** Is `linux/arm64` for WSL wanted, or `linux/amd64` only?
+6. **Shared pipeline.** Should the common workflow steps live in one reusable workflow? Where it lives is tied to the open question of where `agent-cli-core` lives; it is not decided here.
+7. **WSL service support.** Running the daemon's service definition under WSL needs systemd in the WSL distribution ⚠️; confirm before documenting it as supported. Applies only where this tool installs a service.
+
 ## Appendix — Sources consulted
 
 - ServiceNow: [OAuth inbound](https://www.servicenow.com/docs/r/zurich/platform-security/authentication/oauth-inbound.html) · [Federated token authentication (community)](https://www.servicenow.com/community/platform-privacy-security-blog/federated-token-authentication-for-servicenow-api-access-inbound/ba-p/3367827) · [Configure OIDC provider for third-party tokens](https://www.servicenow.com/docs/r/oJu9n0q6rU~F9UHAnNCt5w/DWASCzLZOp2AjTW1J252Aw) · [Third-party ID token](https://www.servicenow.com/docs/bundle/zurich-platform-security/page/integrate/machine-identity/task/configure-a-third-party-id-token.html) · [ServiceNow IdP/MCP configuration](https://www.servicenow.com/docs/r/XRgEFx7nPN6ciT_BBIvnbg/wHMdBoDSi6AUH2QGt19rhA) · [REST API overview, access policies](https://www.servicenow.com/docs/r/MVRCUFVyKWd7vUoUukbW6g/5p0ILxi5PWo5cXuREsZCAQ) · [CMDB Instance API roles (KB2655604)](https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB2655604) · [order_now vs submit_producer (KB2446676)](https://support.servicenow.com/kb?id=kb_article_view&sysparm_article=KB2446676) · [Identification and Reconciliation API](https://www.servicenow.com/docs/r/yokohama/api-reference/rest-apis/c_IdentifyReconcileAPI.html) · [cmdb_read for CI tables (community)](https://www.servicenow.com/community/servicenow-ai-platform-forum/role-needed-for-rest-api-access-to-cmdb-ci-computer/m-p/1062004) · [itil needed for work notes via REST (community)](https://www.servicenow.com/community/developer-forum/required-roles-for-rest-api-is-itil-required/m-p/2762208) · [Service Catalog API (Fluent)](https://www.servicenow.com/docs/r/application-development/servicenow-sdk/fluent-service-catalog-api.html)
