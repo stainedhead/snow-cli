@@ -15,7 +15,7 @@ func post(t *testing.T, u string, form url.Values) (*http.Response, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	buf := new(strings.Builder)
 	b := make([]byte, 4096)
 	n, _ := resp.Body.Read(b)

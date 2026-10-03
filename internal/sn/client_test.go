@@ -258,7 +258,7 @@ func TestNewValidatesOptions(t *testing.T) {
 		{Host: "https://acme.service-now.com", Auth: au},
 		{Host: "acme.service-now.com/x", Auth: au},
 		{Host: "acme.service-now.com", Insecure: true, Auth: au}, // http only for loopback
-		{Host: "acme.service-now.com"},                              // auth required
+		{Host: "acme.service-now.com"},                           // auth required
 	}
 	for i, o := range bad {
 		if _, err := sn.New(o); err == nil {

@@ -144,7 +144,7 @@ func (c *Client) Do(ctx context.Context, call Call) (*Response, error) {
 	if err != nil {
 		return nil, unwrapURLError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return nil, fmt.Errorf("sn: read response: %w", err)
