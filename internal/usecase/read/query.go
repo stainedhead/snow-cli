@@ -68,14 +68,14 @@ func validDotted(f string) bool {
 }
 
 // joinQuery ANDs encoded queries with "^", skipping empty parts.
-func joinQuery(parts ...string) (string, error) {
+func joinQuery(parts ...string) string {
 	var out []string
 	for _, p := range parts {
 		if p = strings.TrimSpace(p); p != "" {
 			out = append(out, p)
 		}
 	}
-	return strings.Join(out, "^"), nil
+	return strings.Join(out, "^")
 }
 
 // cond builds "field=value", refusing values that could inject further

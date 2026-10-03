@@ -46,7 +46,7 @@ func (s Service) TableGet(ctx context.Context, table, sysID string, o Options) (
 func (s Service) TableList(ctx context.Context, table string, o ListOptions) (ListData, error) {
 	res := policymap.Table(table)
 	fields := s.effectiveFields(policymap.VerbList, res, o.Fields, genericFields)
-	return s.list(ctx, policymap.VerbList, res, table, "", fields, o)
+	return s.list(ctx, policymap.VerbList, res, table, noQuery, fields, o)
 }
 
 // TableCount counts matching records through the Aggregate API (FR-022).

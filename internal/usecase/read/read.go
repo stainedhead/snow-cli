@@ -123,7 +123,9 @@ func (s Service) limit(n int) int {
 }
 
 // list is the shared paged read behind every list command.
-func (s Service) list(ctx context.Context, verb, resource, table, query string, fields []string, o ListOptions) (ListData, error) {
+// build produces the use case's own encoded query inside the guarded action
+// (it may need the caller identity); the caller's --query is ANDed after it.
+func (s Service) list(ctx context.Context, verb, resource, table string, build func(context.Context) (string, error), fields []string, o ListOptions) (ListData, error) {
 	if err := validTable(table); err != nil {
 		return ListData{}, err
 	}
@@ -135,12 +137,13 @@ func (s Service) list(ctx context.Context, verb, resource, table, query string, 
 		return ListData{}, err
 	}
 	limit := s.limit(o.Limit)
-	q, err := joinQuery(query, o.Query)
-	if err != nil {
-		return ListData{}, err
-	}
 	var out ListData
 	err = s.guarded(ctx, verb, resource, fields, func(ctx context.Context) error {
+		own, err := build(ctx)
+		if err != nil {
+			return err
+		}
+		q := joinQuery(own, o.Query)
 		res, err := s.Tables.List(ctx, usecase.ListQuery{
 			Table: table, Query: q, Fields: fields, Limit: limit, Offset: o.Offset, OrderBy: order, Display: o.Display,
 		})
@@ -164,3 +167,6 @@ func buildList(res usecase.ListResult, offset, limit int) ListData {
 	page := domain.NewPage(offset, len(items), limit, res.Total)
 	return ListData{Items: items, Page: page, ACLFilteredPossible: page.ACLFilteredPossible(limit)}
 }
+
+// noQuery is the build function of lists without use-case conditions.
+func noQuery(context.Context) (string, error) { return "", nil }
