@@ -21,17 +21,18 @@ There is no suitable stock CLI for this: ServiceNow's own `now-sdk` targets appl
 
 The PRD uses an evidence legend: items marked confirmed were checked against vendor documentation on 2026-10-03; items marked not confirmed (community source or engineering judgment) must be validated before being depended on. This README does not upgrade any of them.
 
-## Shared core: agent-cli-core (open question)
+## Shared core: agent-cli-core (build dependency)
 
-PRD section 5 defines the shared `agent-cli-core` Go module (auth, policy, output, audit, httpx, selftest, docgen) used by `snow`, `outlook` and `teams`. Where it lives, in its own repository or inside this one, is an open question and is not decided here.
+`snow` is built on [agent-cli-core](https://github.com/stainedhead/agent-cli-core), a separate Go library repository (auth, policy, output, audit, httpx, selftest, docgen) that also serves `outlook` and `teams`. It originated in PRD section 5, and its own PRD now owns the specification. `snow` will depend on a released tag of it; no release exists yet, so `go.mod` has no `require` for it for now.
 
 ## Related repositories
 
 Part of the set rooted at [stainedhead/agentic-teams](https://github.com/stainedhead/agentic-teams):
 
+- [agent-cli-core](https://github.com/stainedhead/agent-cli-core) - shared CLI core library this tool depends on
 - [agent-okta-d](https://github.com/stainedhead/agent-okta-d) - credential daemon that supplies agent tokens
-- [outlook-cli](https://github.com/stainedhead/outlook-cli) - companion CLI, reuses the shared core
-- [teams-cli](https://github.com/stainedhead/teams-cli) - companion CLI, reuses the shared core
+- [outlook-cli](https://github.com/stainedhead/outlook-cli) - companion CLI, builds on the shared core
+- [teams-cli](https://github.com/stainedhead/teams-cli) - companion CLI, builds on the shared core
 - [agentic-team-w-paperclip](https://github.com/stainedhead/agentic-team-w-paperclip) - sibling repository in the same set
 
 ## Planned layout
@@ -48,7 +49,7 @@ specs/             feature specs (archive/ for completed)
 user-docs/         install, configuration and usage guides (none yet)
 ```
 
-Package placement depends on the `agent-cli-core` decision above.
+Packages marked "shared core" come from `agent-cli-core` rather than being copied here.
 
 ## Documentation
 

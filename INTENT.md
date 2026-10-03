@@ -42,13 +42,12 @@ Root map: [stainedhead/agentic-teams](https://github.com/stainedhead/agentic-tea
 |---|---|---|
 | [agentic-team-w-paperclip](https://github.com/stainedhead/agentic-team-w-paperclip) | Container images with the Hermes, OMP and OpenCode harnesses, plus Paperclip | Provides the harness and container the agent runs in; `snow` is placed on that host |
 | [agent-okta-d](https://github.com/stainedhead/agent-okta-d) | Credential daemon; Okta OIDC is the identity root | Supplies the short-lived Okta token in agent mode (daemon unix socket) |
-| [snow-cli](https://github.com/stainedhead/snow-cli) | This repository | Defines the shared CLI core (PRD section 5) |
-| [outlook-cli](https://github.com/stainedhead/outlook-cli) | Mail as the agent's own Entra user | Peer tool; reuses the same core |
-| [teams-cli](https://github.com/stainedhead/teams-cli) | Teams messaging as the agent's own Entra user | Peer tool; reuses the same core |
+| [snow-cli](https://github.com/stainedhead/snow-cli) | This repository | The shared core originated in this PRD's section 5 and now lives in agent-cli-core |
+| [agent-cli-core](https://github.com/stainedhead/agent-cli-core) | Shared Go library (auth, policy, output, audit, httpx, selftest, docgen); no binary | The library `snow` builds from; gets `pkg/client` from `agent-okta-d` through it |
+| [outlook-cli](https://github.com/stainedhead/outlook-cli) | Mail as the agent's own Entra user | Peer tool; builds from the same core |
+| [teams-cli](https://github.com/stainedhead/teams-cli) | Teams messaging as the agent's own Entra user | Peer tool; builds from the same core |
 
-PRD section 5 defines the shared `agent-cli-core` Go module (auth, policy, output, audit, httpx,
-selftest, docgen) that `snow`, `outlook` and `teams` are built from. **Where it lives, in its own
-repository or inside this one, is an open question and is not decided here.**
+The shared `agent-cli-core` Go module (auth, policy, output, audit, httpx, selftest, docgen) that `snow`, `outlook` and `teams` are built from originated in PRD section 5. **It is its own repository, [agent-cli-core](https://github.com/stainedhead/agent-cli-core)**, whose PRD owns the specification; `snow` depends on a released tag of it.
 
 ## Goals
 - **Complete the agent's ITSM tasks without any ServiceNow secret on the host** (PRD G1).
