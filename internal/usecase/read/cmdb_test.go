@@ -273,8 +273,7 @@ func TestAppAmbiguousAcrossTables(t *testing.T) {
 	if exitOf(t, err) != output.ExitValidation || !strings.Contains(err.Error(), sid3) {
 		t.Errorf("err = %v", err)
 	}
-	ft.err = errBoom
-	if _, err := svc(t, ft, newGuard(t, allowAll)).App(context.Background(), "Checkout", read.Options{}); err != errBoom {
+	if _, err := svc(t, &fakeTables{err: errBoom}, newGuard(t, allowAll)).App(context.Background(), "Checkout", read.Options{}); err != errBoom {
 		t.Errorf("err = %v", err)
 	}
 }

@@ -29,6 +29,9 @@ type Service struct {
 	Guard    usecase.Guard
 	// Limits are the policy's result caps (limits.max_results).
 	Limits policy.Limits
+	// RelatedNodeCap bounds `cmdb ci related` output nodes; 0 selects
+	// DefaultRelatedNodeCap.
+	RelatedNodeCap int
 }
 
 // FieldAllowlister is an optional capability of the Guard: it reports the
