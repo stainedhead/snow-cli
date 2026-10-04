@@ -20,9 +20,9 @@
 | 5 | Code and Design Review | ✅ Complete | 00:12 | 00:17 | — |
 | 6 | Prepare Review PRD | ✅ Complete | — | 00:17 | — |
 | 7 | Archive Original Spec | ✅ Complete | — | 00:17 | — |
-| 8 | Spec Review Fixes | 🔄 In Progress | 00:17 | — | — |
-| 9  | Implement Review Fixes          | ⬜ Pending | — | — | — |
-| 10 | Archive Fixes Spec              | ⬜ Pending | — | — | — |
+| 8 | Spec Review Fixes | ✅ Complete | 00:17 | 00:39 | — |
+| 9 | Implement Review Fixes | ✅ Complete | — | 00:39 | — |
+| 10 | Archive Fixes Spec | 🔄 In Progress | 00:39 | — | — |
 | 11 | Final Quality Pass              | ⬜ Pending | — | — | — |
 | 12 | Process Analysis Report         | ⬜ Pending | — | — | — |
 | 13 | Archive Spec                    | ⬜ Pending | — | — | — |
