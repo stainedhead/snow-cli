@@ -18,7 +18,10 @@ import (
 )
 
 // Outcome labels. "pending" is an audit.Record.Outcome label: the core Record
-// has no free-form fields.
+// has no free-form fields. A use case may replace ok/error with dry_run or
+// applied_conflict (usecase.SetOutcome); the target record rides in the
+// resource as "<base>:<ref>" (FR-R10; a first-class field is a core change
+// request).
 const (
 	OutcomePending = "pending"
 	OutcomeOK      = "ok"
@@ -44,6 +47,9 @@ type Guard struct {
 	OnWarn func(error)
 	// Now supplies elapsed-time measurement; nil uses time.Now.
 	Now func() time.Time
+	// Limiter enforces rate limits across processes (FR-R02). The in-memory
+	// engine limits only count within one process. Nil disables it.
+	Limiter RateLimiter
 }
 
 var _ usecase.Guard = (*Guard)(nil)
@@ -87,22 +93,56 @@ func decisionLabel(d policy.Decision) string {
 // hasStatus is implemented by errors that know their HTTP status.
 type hasStatus interface{ HTTPStatus() int }
 
+// DecisionProbeBypass is the policy_decision label of a selftest probe: the
+// client policy is skipped on purpose so the server ACL answers (FR-R04).
+const DecisionProbeBypass = "probe_bypass"
+
+// AuditFailed marks an audit write failure so callers (selftest) can abort
+// without importing this package.
+func (*Error) AuditFailed() {}
+
 // Run implements usecase.Guard.
 func (g *Guard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
+	return g.run(ctx, a, fn, false)
+}
+
+// RunProbe runs a selftest server probe (FR-R04): the client policy is
+// deliberately skipped, but the request is audited like a write in Block
+// mode whatever the action kind: a pending record first, no request if it
+// cannot be written, then the outcome record.
+func (g *Guard) RunProbe(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
+	a.Kind = usecase.Write
+	return g.run(ctx, a, fn, true)
+}
+
+func (g *Guard) run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc, probe bool) error {
 	now := g.Now
 	if now == nil {
 		now = time.Now
 	}
 	var d policy.Decision
-	if g.Engine == nil {
+	label := DecisionProbeBypass
+	switch {
+	case probe:
+		d = policy.Decision{Allowed: true}
+	case g.Engine == nil:
 		d = (*policy.Policy)(nil).Evaluate(a.Request)
-	} else {
+	default:
 		d = g.Engine.Check(a.Request)
+	}
+	if !probe {
+		if g.Limiter != nil && d.Allowed {
+			var lerr error
+			if d, lerr = g.Limiter.Admit(g.policyOrNil(), d); lerr != nil {
+				return lerr
+			}
+		}
+		label = decisionLabel(d)
 	}
 	rec := audit.Record{
 		Tool: g.Tool, AgentID: g.AgentID, RunID: g.RunID,
-		Verb: a.Request.Verb, Resource: a.Request.Resource,
-		PolicyDecision: decisionLabel(d),
+		Verb: a.Request.Verb, Resource: usecase.ResourceRef(a.Request.Resource, a.Ref),
+		PolicyDecision: label,
 	}
 	write := a.Kind == usecase.Write
 
@@ -119,6 +159,7 @@ func (g *Guard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 			return &Error{Path: g.Path, Err: err}
 		}
 	}
+	ctx, sink := usecase.WithOutcomeSink(ctx)
 	start := now()
 	status, err := fn(ctx, d)
 	rec.Duration = now().Sub(start)
@@ -131,6 +172,12 @@ func (g *Guard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 	if err != nil {
 		rec.Outcome = OutcomeError
 	}
+	switch o := sink.Outcome(); {
+	case o != "": // the use case knows better: dry_run, applied_conflict
+		rec.Outcome = string(o)
+	case d.DryRunOnly() && err == nil:
+		rec.Outcome = string(usecase.OutcomeDryRun)
+	}
 	if lerr := g.Sink.Log(rec); lerr != nil {
 		if write {
 			return errors.Join(err, &Error{Path: g.Path, MayHaveHappened: true, Err: lerr})
@@ -138,6 +185,13 @@ func (g *Guard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 		g.warn(lerr)
 	}
 	return err
+}
+
+func (g *Guard) policyOrNil() *policy.Policy {
+	if g.Engine == nil {
+		return nil
+	}
+	return g.Engine.Policy()
 }
 
 func (g *Guard) logDenial(rec audit.Record) {

@@ -38,5 +38,5 @@ func newHumanTokenSource(p config.Resolved) (auth.TokenSource, error) {
 	}, storeFactory(), p.Name), nil
 }
 
-// newKeychain returns the human-mode credential store (a humanauth.Store).
-func newKeychain() any { return storeFactory() }
+// newKeychain returns the human-mode credential store.
+func newKeychain() humanauth.Store { return storeFactory() }

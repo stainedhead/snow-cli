@@ -5,12 +5,7 @@ import (
 	"flag"
 
 	"github.com/stainedhead/agent-cli-core/output"
-	"github.com/stainedhead/snow-cli/internal/usecase/selftest"
 )
-
-// ExtraSelftest is the Env.Extra key under which the composition root
-// (app/wire_selftest.go) hands over the selftest.Service.
-const ExtraSelftest = "selftest.service"
 
 // failedError is a failing matrix: a general-category failure, so the process
 // exits 1 (not 4 or 6) as the core selftest does. The message names each
@@ -38,10 +33,10 @@ func RegisterSelftest(r *Router) {
 			fs.Bool("include-writes", false, "also run the two write rows against the configured fixture incidents")
 		},
 		Run: func(ctx context.Context, c *Call) (Result, error) {
-			svc, ok := c.Env.Extra[ExtraSelftest].(selftest.Service)
-			if !ok {
+			if c.Env.Selftest == nil {
 				return Result{}, &UsageError{Msg: "selftest is not wired in this build"}
 			}
+			svc := *c.Env.Selftest
 			svc.IncludeWrites = c.Flags.Lookup("include-writes").Value.String() == "true"
 			res, err := svc.Run(ctx)
 			if err != nil {

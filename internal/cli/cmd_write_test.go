@@ -78,7 +78,7 @@ func writeHarness(t *testing.T) (*harness, *wIncidents, *wTasks, *wOrders) {
 		Incidents: inc, Tasks: tk, Orders: ord, Catalog: wCatalog{},
 		Identity: fakeIdentity{id: domain.Identity{User: "svc"}},
 		Guard:    allowGuard{}, Clock: wFixedClock{},
-		Extra: map[string]any{cli.ExtraTaskFetcher: tk},
+		TaskFetcher: tk,
 	}
 	return h, inc, tk, ord
 }

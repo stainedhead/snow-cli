@@ -243,3 +243,18 @@ func TestAssumptionA02WhoamiPathDefault(t *testing.T) {
 		t.Errorf("paths = %q %q", a.Whoami.Path, b.Whoami.Path)
 	}
 }
+
+func TestPolicyAllowOverrideParsesAndDefaultsFalse(t *testing.T) {
+	base := "profiles:\n  p:\n    mode: agent\n    instance:\n      host: a.service-now.com\n    policy:\n      path: agent\n"
+	c, err := Parse([]byte(base))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Profiles["p"].Policy.AllowOverride {
+		t.Error("allow_override must default to false")
+	}
+	c, err = Parse([]byte(base + "      allow_override: true\n"))
+	if err != nil || !c.Profiles["p"].Policy.AllowOverride {
+		t.Errorf("err=%v cfg=%+v", err, c)
+	}
+}

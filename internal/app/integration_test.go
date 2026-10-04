@@ -34,20 +34,23 @@ const (
 )
 
 type itg struct {
-	t      *testing.T
-	f      *snfake.Fake
-	okta   *oktafake.Fake
-	dir    string
-	cfg    string
-	audit  string
-	mode   string
-	policy string
-	out    bytes.Buffer
-	errb   bytes.Buffer
-	opts   Options
+	t        *testing.T
+	f        *snfake.Fake
+	okta     *oktafake.Fake
+	dir      string
+	cfg      string
+	audit    string
+	mode     string
+	policy   string
+	override bool
+	out      bytes.Buffer
+	errb     bytes.Buffer
+	opts     Options
 }
 
 type itgOpt func(*itg)
+
+func withPolicyOverride() itgOpt { return func(i *itg) { i.override = true } }
 
 func withPolicyText(text string) itgOpt { return func(i *itg) { i.policy = text } }
 
@@ -69,7 +72,7 @@ func newItg(t *testing.T, mode string, opts ...itgOpt) *itg {
 	cfg := "default_profile: p\nprofiles:\n  p:\n    mode: " + mode + "\n    agent_id: agent-1\n" +
 		"    instance:\n      host: " + i.f.Host() + "\n" +
 		"    incident:\n      create_via: table\n" +
-		"    audit:\n      path: " + i.audit + "\n    policy:\n      path: " + polRef + "\n" +
+		"    audit:\n      path: " + i.audit + "\n    policy:\n      path: " + polRef + "\n" + overrideLine(i.override) +
 		"    selftest:\n      fixture_incident: INC0000001\n      foreign_incident: INC0000002\n"
 	if mode == "human" {
 		i.okta = oktafake.New(t)
@@ -638,4 +641,77 @@ func TestIntegrationShippedPoliciesAllowEveryReadCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func overrideLine(on bool) string {
+	if on {
+		return "      allow_override: true\n"
+	}
+	return ""
+}
+
+func okWhoami() snfake.Response {
+	return snfake.Response{JSON: map[string]any{"result": map[string]any{"user_name": "svc.agent", "roles": []string{"x"}}}}
+}
+
+// FR-R04: every selftest server probe is audited (pending first for the
+// writes), with distinct verbs; a failing audit sink sends no probe.
+func TestIntegrationSelftestProbesAreAudited(t *testing.T) {
+	i := newItg(t, "agent")
+	selftestFixtures(i.f)
+	i.f.On("PATCH", "/api/now/v1/table/incident/"+itSID, snfake.Error(403, "acl"))
+	if code, _ := i.run("selftest", "--include-writes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, i.out.String())
+	}
+	verbs := map[string][]string{}
+	refs := map[string]bool{}
+	for _, l := range i.auditLines() {
+		v, _ := l["verb"].(string)
+		if r, _ := l["resource"].(string); strings.HasPrefix(v, "selftest:probe-") {
+			refs[v+" "+r] = true
+		}
+		o, _ := l["outcome"].(string)
+		verbs[v] = append(verbs[v], o)
+		if strings.HasPrefix(v, "selftest:probe-") && l["policy_decision"] != "probe_bypass" {
+			t.Errorf("probe record %v lacks the probe_bypass decision", l)
+		}
+	}
+	for _, v := range []string{"selftest:probe-resolve", "selftest:probe-update"} {
+		if got := verbs[v]; len(got) != 2 || got[0] != "pending" || got[1] != "error" {
+			t.Errorf("%s audit outcomes = %v, want pending then error", v, got)
+		}
+	}
+	if !refs["selftest:probe-resolve incident:INC0000001"] || !refs["selftest:probe-update incident:INC0000002"] {
+		t.Errorf("probe resources lack the target ref: %v", refs)
+	}
+	if got := verbs["selftest:probe-list"]; len(got) != 4 { // sys_user and sys_properties: pending + error
+		t.Errorf("server read probes audited %v", got)
+	}
+}
+
+func TestIntegrationSelftestFailedAuditSendsNoProbe(t *testing.T) {
+	i := newItg(t, "agent")
+	selftestFixtures(i.f)
+	i.f.On("PATCH", "/api/now/v1/table/incident/"+itSID, snfake.Error(403, "acl"))
+	// Reads warn only; the first probe's pending record is the failure point.
+	i.opts.AuditWriter = probeFailWriter{}
+	code, _ := i.run("selftest", "--include-writes")
+	if code != 1 {
+		t.Errorf("exit = %d, want 1", code)
+	}
+	for _, r := range i.f.Requests() {
+		if strings.Contains(r.Path, "sys_user") || strings.Contains(r.Path, "sys_properties") || r.Method == "PATCH" {
+			t.Errorf("probe request sent after its audit record failed: %s %s", r.Method, r.Path)
+		}
+	}
+}
+
+// probeFailWriter fails any write whose line mentions a selftest probe.
+type probeFailWriter struct{}
+
+func (probeFailWriter) Write(p []byte) (int, error) {
+	if strings.Contains(string(p), "selftest:probe-") {
+		return 0, errors.New("disk full")
+	}
+	return len(p), nil
 }

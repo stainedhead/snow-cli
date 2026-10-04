@@ -34,7 +34,7 @@ func TestHumanTokenSourceIsRefresherAndFailsClosed(t *testing.T) {
 	if !errors.As(err, &lr) || output.ExitOf(err) != 3 || !strings.Contains(err.Error(), "not logged in") {
 		t.Errorf("err = %v", err)
 	}
-	if k, ok := newKeychain().(humanauth.Store); !ok || k != humanauth.Store(st) {
+	if k := newKeychain(); k != humanauth.Store(st) {
 		t.Error("keychain must be the same Store")
 	}
 }

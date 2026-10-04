@@ -125,10 +125,30 @@ var (
 	notFound  = status{404, output.CategoryNotFound}
 )
 
+// probeGuard is the audited, policy-skipping guard for the server probes.
+type probeGuard struct {
+	actions []usecase.Action
+	failAt  int // 1-based call number whose audit write fails (0 = never)
+}
+
+type auditFailure struct{}
+
+func (auditFailure) Error() string { return "audit record could not be written" }
+func (auditFailure) AuditFailed()  {}
+
+func (p *probeGuard) RunProbe(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
+	p.actions = append(p.actions, a)
+	if p.failAt != 0 && len(p.actions) == p.failAt {
+		return auditFailure{} // pending record failed: fn must not run
+	}
+	_, err := fn(ctx, policy.Decision{Allowed: true})
+	return err
+}
+
 func svc(t *testing.T, g *guard, tb *tables, inc *incidents) selftest.Service {
 	t.Helper()
 	return selftest.Service{
-		Guard: g, Tables: tb, Catalog: catalog{}, Identity: ident{}, Incidents: inc,
+		Guard: g, Probes: &probeGuard{}, Tables: tb, Catalog: catalog{}, Identity: ident{}, Incidents: inc,
 		Mode: domain.ModeAgent,
 	}
 }
@@ -299,5 +319,97 @@ func TestAuthFailureAbortsWithExit3InsteadOfAMatrixOfProbeErrors(t *testing.T) {
 	_, err := s.Run(context.Background())
 	if output.ExitOf(err) != output.ExitAuth {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestServerProbesAreAuditedWithDistinctVerbsAndSkipClientPolicy(t *testing.T) {
+	inc := &incidents{resolveErr: forbidden, updateErr: forbidden}
+	tb := &tables{denyTables: map[string]error{"sys_user": forbidden, "sys_properties": forbidden}}
+	g := newGuard(t, agentLike)
+	pg := &probeGuard{}
+	s := svc(t, g, tb, inc)
+	s.Probes = pg
+	s.IncludeWrites = true
+	s.Fixture = selftest.Fixture{Own: "INC0000001", Foreign: "INC0000002"}
+	if res, err := s.Run(context.Background()); err != nil || !res.OK() {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if len(pg.actions) != 4 {
+		t.Fatalf("want 4 audited probes (2 server reads, resolve, update), got %d: %+v", len(pg.actions), pg.actions)
+	}
+	seen := map[string]usecase.Action{}
+	for _, a := range pg.actions {
+		if _, dup := seen[a.Request.Verb+" "+a.Request.Resource]; dup {
+			t.Errorf("probe %v not distinct", a.Request)
+		}
+		seen[a.Request.Verb+" "+a.Request.Resource] = a
+		if !strings.HasPrefix(a.Request.Verb, "selftest:probe-") {
+			t.Errorf("verb %q must be a selftest:probe-* verb", a.Request.Verb)
+		}
+	}
+	rv := seen["selftest:probe-resolve incident"]
+	if rv.Kind != usecase.Write || rv.Ref != "INC0000001" {
+		t.Errorf("resolve probe = %+v", rv)
+	}
+	up := seen["selftest:probe-update incident"]
+	if up.Kind != usecase.Write || up.Ref != "INC0000002" {
+		t.Errorf("update probe = %+v", up)
+	}
+	// The probes never went through the client policy guard.
+	for _, r := range g.calls {
+		if strings.HasPrefix(r.Verb, "selftest:probe-") {
+			t.Errorf("probe %v went through the policy guard", r)
+		}
+	}
+}
+
+func TestFailedAuditOnWriteProbeSendsNoRequestAndAborts(t *testing.T) {
+	inc := &incidents{resolveErr: forbidden, updateErr: forbidden}
+	tb := &tables{denyTables: map[string]error{"sys_user": forbidden, "sys_properties": forbidden}}
+	pg := &probeGuard{failAt: 3} // 1,2 = server reads; 3 = resolve
+	s := svc(t, newGuard(t, agentLike), tb, inc)
+	s.Probes = pg
+	s.IncludeWrites = true
+	s.Fixture = selftest.Fixture{Own: "INC0000001", Foreign: "INC0000002"}
+	_, err := s.Run(context.Background())
+	if err == nil || output.ExitOf(err) != output.ExitGeneral {
+		t.Fatalf("audit failure must abort the selftest with a general error, got %v", err)
+	}
+	if len(inc.resolved)+len(inc.updated) != 0 {
+		t.Errorf("a write probe was sent after the audit failure: resolved=%v updated=%v", inc.resolved, inc.updated)
+	}
+	if len(pg.actions) != 3 {
+		t.Errorf("probes after the audit failure must not run, got %d actions", len(pg.actions))
+	}
+}
+
+func TestFailedAuditOnServerReadProbeSendsNoRequest(t *testing.T) {
+	tb := &tables{}
+	pg := &probeGuard{failAt: 1}
+	s := svc(t, newGuard(t, agentLike), tb, &incidents{})
+	s.Probes = pg
+	_, err := s.Run(context.Background())
+	if err == nil {
+		t.Fatal("audit failure must surface")
+	}
+	for _, tbl := range tb.listed {
+		if tbl == "sys_user" {
+			t.Error("the sys_user probe request was sent although its audit record failed")
+		}
+	}
+}
+
+func TestMissingProbeGuardFailsClosedWithoutRequests(t *testing.T) {
+	tb := &tables{}
+	s := svc(t, newGuard(t, agentLike), tb, &incidents{})
+	s.Probes = nil
+	res, _ := s.Run(context.Background())
+	if res.OK() {
+		t.Fatal("a missing probe guard must fail the server-probe rows")
+	}
+	for _, tbl := range tb.listed {
+		if tbl == "sys_user" || tbl == "sys_properties" {
+			t.Errorf("unaudited probe request sent to %s", tbl)
+		}
 	}
 }

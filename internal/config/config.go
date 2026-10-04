@@ -90,6 +90,10 @@ type Audit struct {
 // PolicyRef locates the policy file.
 type PolicyRef struct {
 	Path string `yaml:"path"`
+	// AllowOverride lets the --policy flag select a policy other than the
+	// one configured for the profile (FR-R06). Default false: in agent mode
+	// --policy is refused, and a named policy must match the profile mode.
+	AllowOverride bool `yaml:"allow_override"`
 }
 
 // Whoami configures the identity endpoint.

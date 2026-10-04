@@ -12,12 +12,7 @@ import (
 	"github.com/stainedhead/snow-cli/internal/config"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/humanauth"
-	"github.com/stainedhead/snow-cli/internal/sn"
 )
-
-// ExtraHumanAuth is the Env.Extra key under which tests (or the composition
-// root) pass a *HumanAuthDeps. Absent means production defaults.
-const ExtraHumanAuth = "humanauth"
 
 // HumanAuthDeps are the injectable seams of the auth commands.
 type HumanAuthDeps struct {
@@ -30,8 +25,8 @@ type HumanAuthDeps struct {
 }
 
 func depsOf(e *Env) HumanAuthDeps {
-	if d, ok := e.Extra[ExtraHumanAuth].(*HumanAuthDeps); ok && d != nil {
-		return *d
+	if e.HumanAuth != nil {
+		return *e.HumanAuth
 	}
 	return HumanAuthDeps{}
 }
@@ -40,7 +35,7 @@ func requireHuman(e *Env, cmd string) error {
 	if e.Mode == domain.ModeHuman {
 		return nil
 	}
-	return sn.AdaptPolicyError(&policy.DeniedError{Decision: policy.Decision{
+	return e.adaptPolicy(&policy.DeniedError{Decision: policy.Decision{
 		RuleID: "auth-human-only",
 		Reason: "`snow " + cmd + "` is a human-mode command; agent profiles authenticate through the credential daemon (FR-017)",
 	}})
@@ -78,8 +73,8 @@ func storeFor(e *Env, d HumanAuthDeps, insecure bool) (humanauth.Store, error) {
 		}
 		return humanauth.NewFileStore(p), nil
 	}
-	if st, ok := e.Keychain.(humanauth.Store); ok {
-		return st, nil
+	if e.Keychain != nil {
+		return e.Keychain, nil
 	}
 	return humanauth.StubStore{Backend: "none", Reason: "no credential store is wired for this profile"}, nil
 }
