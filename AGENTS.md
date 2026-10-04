@@ -4,9 +4,9 @@ Rules for AI agents and human contributors working in this repository.
 
 ## Project summary
 
-`snow` is a planned Go CLI for ServiceNow work needed by autonomous SDLC agents and human teammates: read tables, look up CMDB configuration items, and read, create and update work items (incidents, requests, catalog tasks). It exposes narrow task-shaped verbs (no raw REST passthrough) and two authentication modes on one command surface: agent mode (short-lived Okta token from the `agent-okta-d` daemon) and human mode (Okta OAuth 2.0 authorization code + PKCE). ServiceNow roles and ACLs are the security boundary; the CLI policy engine is a guardrail and usability layer, never the control.
+`snow` is a Go CLI for ServiceNow work needed by autonomous SDLC agents and human teammates: read tables, look up CMDB configuration items, and read, create and update work items (incidents, requests, catalog tasks). It exposes narrow task-shaped verbs (no raw REST passthrough) and two authentication modes on one command surface: agent mode (short-lived Okta token from the `agent-okta-d` daemon) and human mode (Okta OAuth 2.0 authorization code + PKCE). ServiceNow roles and ACLs are the security boundary; the CLI policy engine is a guardrail and usability layer, never the control.
 
-Status: Draft PRD, no implementation yet. The PRD is [snow-cli-PRD.md](snow-cli-PRD.md); keep it at the repo root. Evidence markers in the PRD (confirmed vs not confirmed) must be preserved when summarizing it.
+Status: implemented and tested against fakes only (not yet run against a real ServiceNow instance or Okta tenant); agent mode is a fail-closed stub until the `agent-okta-d` adapter exists. The PRD is [snow-cli-PRD.md](specs/archive/261003-snow-cli/snow-cli-PRD.md) with the spec alongside it. Evidence markers in the PRD (confirmed vs not confirmed) must be preserved when summarizing it.
 
 ## Shared core (agent-cli-core)
 
@@ -14,7 +14,7 @@ Status: Draft PRD, no implementation yet. The PRD is [snow-cli-PRD.md](snow-cli-
 
 - Core changes are made in `agent-cli-core`, never copied into this repository.
 - Depend on released tags only: no pseudo-versions, no `replace` directives on `main`.
-- Do NOT add a `require` for `agent-cli-core` to `go.mod` yet: no release exists. Add it when the first tag exists.
+- `go.mod` requires `agent-cli-core v0.1.0`; a core bump is an ordinary PR.
 - If the core PRD and PRD section 5 differ, the core PRD wins.
 
 ## Layout
@@ -22,9 +22,9 @@ Status: Draft PRD, no implementation yet. The PRD is [snow-cli-PRD.md](snow-cli-
 Doc routing: a shift in goal, direction or scope goes in [INTENT.md](INTENT.md) (why and where the tool fits); requirements go in the PRD; contributor rules go here.
 
 - `INTENT.md` - purpose, wider context, goals, non-goals, scope boundary
-- `snow-cli-PRD.md` - product requirements (the how)
+- `specs/archive/261003-snow-cli/snow-cli-PRD.md` - product requirements (the how)
 
-Planned Go layout (from PRD section 4; create directories only when code needs them):
+Go layout (see README.md for the full list):
 
 - `cmd/snow/` - binary entry point
 - `internal/auth/`, `internal/policy/`, `internal/sn/`, `internal/output/`, `internal/audit/` - packages per the PRD architecture (shared-core packages come from `agent-cli-core`)

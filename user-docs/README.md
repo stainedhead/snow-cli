@@ -1,13 +1,12 @@
 # user-docs
 
-This directory holds only files that help a user adopt, configure and use `snow`:
+Guides for adopting, configuring and using `snow`.
 
-- install
-- getting started
-- configuration reference
-- usage examples
-- troubleshooting
+- [Getting started](getting-started.md): build, configure, first commands
+- [Configuration reference](configuration.md): `config.yaml` keys, policy files, environment variables
+- [Usage examples](usage.md): every command with examples and output notes
+- [Human login](human-login.md): Okta sign-in, device flow, credential storage
+- [Troubleshooting](troubleshooting.md): exit codes, common failures
+- [Verifying releases](verifying-releases.md): what can and cannot be verified today
 
-It is NOT for design, requirements, spec or process material, and it must not link into `specs/`. Those belong in `docs/`, `specs/` or the PRD.
-
-Status: the tool is not implemented yet (Draft PRD only), so there are no user guides yet.
+Status: implemented and tested against fakes and `httptest` servers only. It has not been run against a real ServiceNow instance or Okta tenant. Behaviour that depends on your instance is marked "unverified" in these guides.

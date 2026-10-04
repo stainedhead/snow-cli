@@ -1,0 +1,125 @@
+package sn
+
+import (
+	"fmt"
+
+	"github.com/stainedhead/agent-cli-core/output"
+)
+
+// NotFoundError is a 404 (also how ACL-hidden records appear, A-03).
+// ASSUMPTION(unverified against a real instance): ACL-hidden records appear as 404 / empty pages.
+type NotFoundError struct {
+	Status  int
+	Message string
+}
+
+func (e *NotFoundError) Error() string {
+	return fmt.Sprintf("not found (HTTP %d): %s", e.Status, e.Message)
+}
+func (*NotFoundError) Category() output.Category { return output.CategoryNotFound }
+func (*NotFoundError) Hint() string {
+	return "The record does not exist or your ServiceNow roles cannot see it."
+}
+
+// HTTPStatus returns the upstream status.
+func (e *NotFoundError) HTTPStatus() int { return e.Status }
+
+// ConflictError is a 409 or 412, or a sys_mod_count conflict found by the
+// write guard.
+type ConflictError struct {
+	Status  int
+	Message string
+	// AppliedChange is set when the write was sent and applied before the
+	// conflict was noticed (FR-R08): the caller must not simply retry it.
+	AppliedChange bool
+}
+
+// Applied reports that the write was applied despite the conflict; the use
+// case records the applied_conflict audit outcome from it.
+func (e *ConflictError) Applied() bool { return e.AppliedChange }
+
+func (e *ConflictError) Error() string {
+	return fmt.Sprintf("conflict (HTTP %d): %s", e.Status, e.Message)
+}
+func (*ConflictError) Category() output.Category { return output.CategoryConflict }
+func (e *ConflictError) Hint() string {
+	if e.AppliedChange {
+		return "The change was already applied; do not repeat it (a retry would duplicate work notes). Re-read the record and reconcile with the other writer."
+	}
+	return "The record changed or conflicts with the request. Re-read it and retry deliberately."
+}
+
+// HTTPStatus returns the upstream status.
+func (e *ConflictError) HTTPStatus() int { return e.Status }
+
+// ValidationError is a 400 or 422.
+type ValidationError struct {
+	Status  int
+	Message string
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("validation failed (HTTP %d): %s", e.Status, e.Message)
+}
+func (*ValidationError) Category() output.Category { return output.CategoryValidation }
+func (*ValidationError) Hint() string {
+	return "ServiceNow rejected the request as invalid. Check field names and values."
+}
+
+// HTTPStatus returns the upstream status.
+func (e *ValidationError) HTTPStatus() int { return e.Status }
+
+// APIError is any other unexpected status (exit 1).
+type APIError struct {
+	Status  int
+	Message string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("ServiceNow returned HTTP %d: %s", e.Status, e.Message)
+}
+func (*APIError) Category() output.Category { return output.CategoryGeneral }
+func (*APIError) Hint() string              { return "Unexpected response from ServiceNow." }
+
+// HTTPStatus returns the upstream status.
+func (e *APIError) HTTPStatus() int { return e.Status }
+
+// ServerError is a 5xx that is not rate limiting (500, 501, 505...). It maps
+// to exit 8 because the failure is on the server side and may be transient,
+// but the text says what happened instead of calling it rate limiting.
+type ServerError struct {
+	Status  int
+	Message string
+}
+
+func (e *ServerError) Error() string {
+	return fmt.Sprintf("ServiceNow server error (HTTP %d): %s", e.Status, e.Message)
+}
+
+// Category is rate_limited (exit 8: transient, retry later).
+func (*ServerError) Category() output.Category { return output.CategoryRateLimited }
+
+// Hint advises waiting, and checking a write before repeating it.
+func (*ServerError) Hint() string {
+	return "ServiceNow failed while handling the request. Wait and retry later; for a write, check whether it was applied before repeating it."
+}
+
+// HTTPStatus returns the upstream status.
+func (e *ServerError) HTTPStatus() int { return e.Status }
+
+// ResponseTooLargeError is a response body over the client limit (exit 1).
+type ResponseTooLargeError struct {
+	Limit int
+}
+
+func (e *ResponseTooLargeError) Error() string {
+	return fmt.Sprintf("response too large: ServiceNow returned more than %d bytes", e.Limit)
+}
+
+// Category is general.
+func (*ResponseTooLargeError) Category() output.Category { return output.CategoryGeneral }
+
+// Hint suggests narrowing the request.
+func (*ResponseTooLargeError) Hint() string {
+	return "Narrow the request: fewer --fields, a smaller --limit, or a tighter --query."
+}
