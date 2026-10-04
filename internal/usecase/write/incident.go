@@ -66,8 +66,8 @@ func (s IncidentService) validateCreate(in CreateInput) error {
 }
 
 // Create implements FR-040/043/044. Priority is never sent (A-01). The
-// dedupe lookup runs inside the guarded action; the adapter marks the create
-// POST safe to retry only because this method calls it after a miss.
+// dedupe lookup runs inside the guarded action; the adapter re-runs it before
+// every re-send of the create POST (FR-R07).
 func (s IncidentService) Create(ctx context.Context, in CreateInput) (domain.WriteResult, error) {
 	if err := s.validateCreate(in); err != nil {
 		return domain.WriteResult{}, err
