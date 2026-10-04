@@ -186,6 +186,10 @@ func transientSend(ctx context.Context, err error) bool {
 	if errors.As(err, &rl) {
 		return true
 	}
+	var se *ServerError
+	if errors.As(err, &se) {
+		return true
+	}
 	var ue *url.Error
 	var ne net.Error
 	return errors.As(err, &ue) || errors.As(err, &ne)

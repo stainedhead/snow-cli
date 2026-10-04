@@ -201,8 +201,10 @@ func (s Service) CIRelated(ctx context.Context, ref, direction string, depth int
 		if err != nil {
 			return err
 		}
-		out, err = s.traverse(ctx, nodeOf(root, 0), direction, depth)
-		return err
+		return s.guarded(ctx, policymap.VerbList, policymap.Table(tableRel), relFields, func(ctx context.Context) error {
+			out, err = s.traverse(ctx, nodeOf(root, 0), direction, depth)
+			return err
+		})
 	})
 	if err != nil {
 		return RelatedData{}, err
@@ -322,12 +324,14 @@ func (s Service) App(ctx context.Context, name string, o Options) (AppData, erro
 		default:
 			return ambiguous(name, found)
 		}
-		rel, err := s.traverse(ctx, nodeOf(found[0], 0), "down", 1)
-		if err != nil {
-			return err
-		}
-		out = AppData{Application: Present(found[0]), Related: rel}
-		return nil
+		return s.guarded(ctx, policymap.VerbList, policymap.Table(tableRel), relFields, func(ctx context.Context) error {
+			rel, err := s.traverse(ctx, nodeOf(found[0], 0), "down", 1)
+			if err != nil {
+				return err
+			}
+			out = AppData{Application: Present(found[0]), Related: rel}
+			return nil
+		})
 	})
 	if err != nil {
 		return AppData{}, err

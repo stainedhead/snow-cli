@@ -65,7 +65,7 @@ func ValidateKey(k string) error {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-', r == ':':
 		default:
-			return fmt.Errorf("--idempotency-key %q may contain only letters, digits and . _ - :", k)
+			return fmt.Errorf("--idempotency-key %q may contain only letters, digits and the characters . _ - and colon", k)
 		}
 	}
 	return nil

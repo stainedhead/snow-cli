@@ -145,11 +145,18 @@ func (c *Client) Do(ctx context.Context, call Call) (*Response, error) {
 		return nil, unwrapURLError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
 	if err != nil {
 		return nil, fmt.Errorf("sn: read response: %w", err)
 	}
+	tooLarge := len(data) > maxBody
+	if tooLarge {
+		data = data[:maxBody]
+	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if tooLarge {
+			return nil, &ResponseTooLargeError{Limit: maxBody}
+		}
 		r := &Response{Status: resp.StatusCode, Header: resp.Header, Body: data}
 		if n, err := strconv.Atoi(resp.Header.Get("X-Total-Count")); err == nil && n >= 0 {
 			r.Total = &n
@@ -181,9 +188,12 @@ func mapStatus(status int, body []byte) error {
 		return &NotFoundError{Status: status, Message: msg}
 	case status == http.StatusConflict || status == http.StatusPreconditionFailed:
 		return &ConflictError{Status: status, Message: msg}
-	case status >= 500:
-		// Statuses the core does not already classify (500, 501, 505...).
+	case status == http.StatusTooManyRequests, status == http.StatusBadGateway, status == http.StatusServiceUnavailable, status == http.StatusGatewayTimeout:
 		return &httpx.RateLimitedError{Status: status, Attempts: 1}
+	case status >= 500:
+		// Statuses the core does not already classify (500, 501, 505...):
+		// a server error, not rate limiting (FR-R13).
+		return &ServerError{Status: status, Message: msg}
 	}
 	return &APIError{Status: status, Message: msg}
 }

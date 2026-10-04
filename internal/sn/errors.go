@@ -83,3 +83,43 @@ func (*APIError) Hint() string              { return "Unexpected response from S
 
 // HTTPStatus returns the upstream status.
 func (e *APIError) HTTPStatus() int { return e.Status }
+
+// ServerError is a 5xx that is not rate limiting (500, 501, 505...). It maps
+// to exit 8 because the failure is on the server side and may be transient,
+// but the text says what happened instead of calling it rate limiting.
+type ServerError struct {
+	Status  int
+	Message string
+}
+
+func (e *ServerError) Error() string {
+	return fmt.Sprintf("ServiceNow server error (HTTP %d): %s", e.Status, e.Message)
+}
+
+// Category is rate_limited (exit 8: transient, retry later).
+func (*ServerError) Category() output.Category { return output.CategoryRateLimited }
+
+// Hint advises waiting, and checking a write before repeating it.
+func (*ServerError) Hint() string {
+	return "ServiceNow failed while handling the request. Wait and retry later; for a write, check whether it was applied before repeating it."
+}
+
+// HTTPStatus returns the upstream status.
+func (e *ServerError) HTTPStatus() int { return e.Status }
+
+// ResponseTooLargeError is a response body over the client limit (exit 1).
+type ResponseTooLargeError struct {
+	Limit int
+}
+
+func (e *ResponseTooLargeError) Error() string {
+	return fmt.Sprintf("response too large: ServiceNow returned more than %d bytes", e.Limit)
+}
+
+// Category is general.
+func (*ResponseTooLargeError) Category() output.Category { return output.CategoryGeneral }
+
+// Hint suggests narrowing the request.
+func (*ResponseTooLargeError) Hint() string {
+	return "Narrow the request: fewer --fields, a smaller --limit, or a tighter --query."
+}

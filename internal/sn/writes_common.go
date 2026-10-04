@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/snow-cli/internal/domain"
@@ -183,8 +182,6 @@ func (c *Client) wGuardedPatch(ctx context.Context, table, ref string, fields ma
 	}
 	return domain.WriteResult{Record: rec}, nil
 }
-
-func wJoin(parts ...string) string { return strings.Join(parts, "^") }
 
 // ProducerConfigError reports a missing or unsafe incident.producer setting.
 type ProducerConfigError struct{}
