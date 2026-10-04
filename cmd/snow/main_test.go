@@ -79,21 +79,6 @@ func TestVersionNeedsNoConfig(t *testing.T) {
 	}
 }
 
-func TestWhoamiAgentModeDaemonStubIsExit3NamingSocket(t *testing.T) {
-	e := setup(t, policyAllowWhoami)
-	code, m, _ := exec(t, app.Options{Insecure: true}, "whoami", "--config", e.cfg)
-	if code != 3 {
-		t.Fatalf("exit = %d, want 3: %v", code, m)
-	}
-	msg := m["error"].(map[string]any)["message"].(string)
-	if !strings.Contains(msg, "/run/stub-daemon.sock") {
-		t.Errorf("message must name the socket: %s", msg)
-	}
-	if len(e.fake.Requests()) != 0 {
-		t.Error("no HTTP request without a token")
-	}
-}
-
 func TestWhoamiWithFakeDaemonReturnsIdentityAndAudits(t *testing.T) {
 	e := setup(t, policyAllowWhoami)
 	e.fake.On("GET", "/api/x_corp_agent/v1/whoami", snfake.Response{Status: 200, JSON: map[string]any{

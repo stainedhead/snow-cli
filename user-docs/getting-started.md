@@ -6,7 +6,7 @@
 
 Built and tested against fakes only. Not yet run against a real ServiceNow instance or Okta tenant. In this release:
 
-- Agent mode needs the `agent-okta-d` credential daemon adapter, which is not built yet. Any agent-mode command that needs a token exits 3 with a message naming the daemon socket.
+- Agent mode gets its token from a running `agent-okta-d` credential daemon. It has been tested only against a fake daemon. If the daemon is not reachable the command exits 3 with a message naming the socket (see [Configuration](configuration.md#credential-daemon-agent-mode)).
 - Human mode works end to end against a test Okta, but the real OS keychain backends are not built. Until they are, sign-in needs `--insecure-store` (a plain 0600 file).
 
 See the full list in [Troubleshooting](troubleshooting.md#not-built-in-this-release).

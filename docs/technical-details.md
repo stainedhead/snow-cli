@@ -1,6 +1,6 @@
 # Technical details
 
-Module `github.com/stainedhead/snow-cli`, Go 1.27, one direct dependency besides the shared core (`github.com/goccy/go-yaml` for the strict config). Requires `github.com/stainedhead/agent-cli-core v0.1.0` with no `replace` and no pseudo-version.
+Module `github.com/stainedhead/snow-cli`, Go 1.27, direct dependencies besides the shared core: `github.com/goccy/go-yaml` (strict config) and, for tests only, `github.com/stainedhead/agent-okta-d` (`clienttest` fake daemon). Requires `github.com/stainedhead/agent-cli-core v0.2.0` (which brings `agent-okta-d v0.1.0` for its `oktad` adapter) with no `replace` and no pseudo-version.
 
 ## Package layout (dependencies point inward)
 
@@ -8,7 +8,7 @@ Module `github.com/stainedhead/snow-cli`, Go 1.27, one direct dependency besides
 |---|---|
 | `cmd/snow` | Entry point; composition root call; ldflags-stamped `version`, `commit`, `date`. |
 | `internal/cli` | Command router (stdlib `flag`, no CLI framework), global flags, command registration (`cmd_*.go`), rendering via core `output`, exit mapping, skill generation from the command tree. |
-| `internal/app` | Composition root: loads config, loads policy, builds the token source, the `sn` client, the audit logger and the guard, then wires ports (`wire_*.go`, `human.go`). |
+| `internal/app` | Composition root: loads config, loads policy, builds the token source (agent mode: the core `auth/oktad` adapter over the daemon socket, ADR-017), the `sn` client, the audit logger and the guard, then wires ports (`wire_*.go`, `human.go`). |
 | `internal/usecase` (`read`, `write`, `selftest`, `whoami`) | Command services and the ports they need. No `net/http`, keychain or filesystem. Coverage gate 90%. |
 | `internal/domain` | Records, identifiers, modes, impact/urgency scale. |
 | `internal/sn` | ServiceNow HTTP adapter: pinned `/api/now/v1` paths, status to error-category mapping, Table, Aggregate, Service Catalog and CMDB relationship calls, writes, identity. |
@@ -16,7 +16,6 @@ Module `github.com/stainedhead/snow-cli`, Go 1.27, one direct dependency besides
 | `internal/auditx` | Guard that runs policy check, audit (block for writes, warn for reads) and the action. |
 | `internal/config` | Strict YAML config, host validation, defaults. |
 | `internal/humanauth` | Okta PKCE and device flows, token refresh with rotation, credential stores (memory, 0600 file, fail-closed stubs). |
-| `internal/agentauth` | Fail-closed daemon client (ADR-002). |
 | `internal/idempotency`, `internal/provenance` | Default idempotency key; provenance work-note prefix and `correlation_display`. |
 | `internal/repocheck` | Repository invariants as tests (`go.mod` shape, assumptions register vs tests). |
 | `policies` | Embedded `agent.policy.yaml` and `human.policy.yaml`. |

@@ -26,10 +26,10 @@ func TestGoModModuleAndGoVersion(t *testing.T) {
 	}
 }
 
-func TestGoModRequiresCoreV010(t *testing.T) {
+func TestGoModRequiresCoreV020(t *testing.T) {
 	mod := readGoMod(t)
-	if !regexp.MustCompile(`github\.com/stainedhead/agent-cli-core v0\.1\.0\b`).MatchString(mod) {
-		t.Errorf("go.mod must require agent-cli-core v0.1.0:\n%s", mod)
+	if !regexp.MustCompile(`github\.com/stainedhead/agent-cli-core v0\.2\.0\b`).MatchString(mod) {
+		t.Errorf("go.mod must require agent-cli-core v0.2.0:\n%s", mod)
 	}
 }
 
@@ -40,8 +40,5 @@ func TestGoModNoReplaceNoPseudoVersion(t *testing.T) {
 	}
 	if regexp.MustCompile(`v\d+\.\d+\.\d+-(\d+\.)?\d{14}-[0-9a-f]{12}`).MatchString(mod) {
 		t.Error("go.mod must not contain pseudo-versions")
-	}
-	if strings.Contains(mod, "agent-okta-d") {
-		t.Error("go.mod must not require agent-okta-d (daemon adapter is deferred)")
 	}
 }

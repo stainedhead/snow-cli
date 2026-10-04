@@ -76,7 +76,8 @@ type Okta struct {
 	TokenType string `yaml:"token_type"`
 }
 
-// Daemon configures the credential daemon client.
+// Daemon configures the credential daemon client. An empty Socket defers to
+// the adapter: AGENT_OKTA_D_SOCKET, then the platform default.
 type Daemon struct {
 	Socket   string `yaml:"socket"`
 	Provider string `yaml:"provider"`
@@ -122,11 +123,10 @@ type Incident struct {
 
 // Defaults.
 const (
-	DefaultDaemonSocket = "/var/run/agent-okta-d/agent-okta-d.sock"
-	DefaultProvider     = "snow"
-	DefaultWhoamiPath   = "/api/x_corp_agent/v1/whoami"
-	EnvInstanceHost     = "SNOW_INSTANCE_HOST"
-	EnvConfig           = "SNOW_CONFIG"
+	DefaultProvider   = "snow"
+	DefaultWhoamiPath = "/api/x_corp_agent/v1/whoami"
+	EnvInstanceHost   = "SNOW_INSTANCE_HOST"
+	EnvConfig         = "SNOW_CONFIG"
 )
 
 // Resolved is a validated profile with defaults and the effective host.
@@ -267,9 +267,6 @@ func (c *Config) Resolve(name string, env func(string) string) (Resolved, error)
 	}
 	if p.Daemon.Provider == "" {
 		p.Daemon.Provider = DefaultProvider
-	}
-	if p.Daemon.Socket == "" {
-		p.Daemon.Socket = DefaultDaemonSocket
 	}
 	if p.Whoami.Path == "" {
 		p.Whoami.Path = DefaultWhoamiPath

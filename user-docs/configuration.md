@@ -41,6 +41,15 @@ profiles:
       token_type: access
 ```
 
+### Credential daemon (agent mode)
+
+Agent mode asks the `agent-okta-d` daemon for a short-lived token over a unix socket. The socket is `daemon.socket` if the profile sets it, otherwise the `AGENT_OKTA_D_SOCKET` environment variable, otherwise the platform default (`/var/run/agent-okta-d/agent-okta-d.sock` on Linux). Each daemon request times out after 5 seconds.
+
+Exit codes from the daemon path:
+
+- Exit 3: the daemon is unreachable (the message names the socket), the credential needs re-enrollment (`reauth_required`) or was revoked, or the daemon refuses or does not know the provider. A person must act: start the daemon or fix the socket, or ask the `agent-okta-d` operator to re-enroll the credential.
+- Exit 8: the daemon is degraded and may serve later; the hint gives the wait. Retry after that time.
+
 ### Keys (per profile)
 
 | Key | Default | Meaning |
@@ -52,7 +61,7 @@ profiles:
 | `okta.issuer` | none | Okta issuer URL (https). Human mode only. |
 | `okta.client_id` | none | Okta native app client id. Human mode only. |
 | `okta.token_type` | `access` | `access` or `id`: which Okta token is sent to ServiceNow. Unverified which one your instance accepts; flip it if human calls return 401. |
-| `daemon.socket` | `/var/run/agent-okta-d/agent-okta-d.sock` | Credential daemon socket (agent mode). Named in the error message when unreachable. |
+| `daemon.socket` | unset: `AGENT_OKTA_D_SOCKET`, else the platform default | Credential daemon socket (agent mode). When set it wins over the environment variable. Named in the error message when unreachable. |
 | `daemon.provider` | `snow` | Provider name requested from the daemon. |
 | `audit.path` | `~/.local/state/snow/audit.jsonl` | Audit log (JSON lines). |
 | `policy.path` | none | Policy file. |
