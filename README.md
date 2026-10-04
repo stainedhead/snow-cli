@@ -89,3 +89,7 @@ Project documents:
 ```
 make fmt vet lint test race build
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
