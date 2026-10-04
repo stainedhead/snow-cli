@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
-	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/policymap"
 	"github.com/stainedhead/snow-cli/internal/usecase"
@@ -16,13 +16,12 @@ import (
 const nameProbeLimit = 20
 
 func presentItem(it domain.CatalogItem) map[string]any {
-	m := map[string]any{"sys_id": it.SysID, "name": it.Name, "category": it.Category}
-	if it.ShortDescription != "" {
-		m["short_description"] = output.Untrusted{Value: it.ShortDescription}
-	} else {
-		m["short_description"] = ""
+	return map[string]any{
+		"sys_id":            mark("sys_id", it.SysID, "", time.Time{}),
+		"name":              markText(it.Name),
+		"category":          markText(it.Category),
+		"short_description": markText(it.ShortDescription),
 	}
-	return m
 }
 
 // CatalogSearch finds catalog items by text (FR-035). The Service Catalog API
@@ -133,7 +132,7 @@ func (s Service) CatalogVars(ctx context.Context, ref string) (VarsData, error) 
 		if vars == nil {
 			vars = []domain.CatalogVariable{}
 		}
-		out = VarsData{Item: map[string]any{"sys_id": it.SysID, "name": it.Name}, Variables: vars}
+		out = VarsData{Item: map[string]any{"sys_id": mark("sys_id", it.SysID, "", time.Time{}), "name": markText(it.Name)}, Variables: vars}
 		return nil
 	})
 	if err != nil {

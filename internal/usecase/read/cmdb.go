@@ -2,9 +2,11 @@ package read
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/snow-cli/internal/domain"
@@ -120,6 +122,25 @@ type NodeData struct {
 	Depth int    `json:"depth"`
 }
 
+// MarshalJSON marks the CI name as untrusted text (FR-R12); the sys_id and
+// class stay plain when they have their structured shape.
+func (n NodeData) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		SysID any `json:"sys_id"`
+		Name  any `json:"name"`
+		Class any `json:"class,omitempty"`
+		Depth int `json:"depth"`
+	}{mark("sys_id", n.SysID, "", time.Time{}), markText(n.Name), omitEmpty(mark("sys_class_name", n.Class, "", time.Time{})), n.Depth})
+}
+
+// omitEmpty turns an empty string into nil so omitempty drops it.
+func omitEmpty(v any) any {
+	if s, ok := v.(string); ok && s == "" {
+		return nil
+	}
+	return v
+}
+
 // EdgeData is one cmdb_rel_ci relationship.
 type EdgeData struct {
 	Parent     string `json:"parent"`
@@ -128,6 +149,20 @@ type EdgeData struct {
 	ChildName  string `json:"child_name,omitempty"`
 	Type       string `json:"type,omitempty"`
 	Depth      int    `json:"depth"`
+}
+
+// MarshalJSON marks the CI names and the relationship type as untrusted text
+// (FR-R12).
+func (e EdgeData) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Parent     any `json:"parent"`
+		ParentName any `json:"parent_name,omitempty"`
+		Child      any `json:"child"`
+		ChildName  any `json:"child_name,omitempty"`
+		Type       any `json:"type,omitempty"`
+		Depth      int `json:"depth"`
+	}{mark("parent", e.Parent, "", time.Time{}), omitEmpty(markText(e.ParentName)),
+		mark("child", e.Child, "", time.Time{}), omitEmpty(markText(e.ChildName)), omitEmpty(markText(e.Type)), e.Depth})
 }
 
 // RelatedData is the data of `cmdb ci related`. Direction "down" follows

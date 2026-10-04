@@ -58,7 +58,7 @@ func cmdbTables(rels ...domain.Record) *fakeTables {
 func TestCIGetBySysID(t *testing.T) {
 	ft, g := cmdbTables(), newGuard(t, allowAll)
 	got, err := svc(t, ft, g).CIGet(context.Background(), sid1, read.Options{Fields: []string{"name"}})
-	if err != nil || got["name"] != "web01" {
+	if err != nil || text(got["name"]) != "web01" {
 		t.Fatalf("%v %v", got, err)
 	}
 	if ft.gets[0].Table != "cmdb_ci" {
@@ -72,7 +72,7 @@ func TestCIGetBySysID(t *testing.T) {
 func TestCIGetByNameNeedsIdentifyingFieldsInPolicyRequest(t *testing.T) {
 	ft, g := cmdbTables(), newGuard(t, allowAll)
 	got, err := svc(t, ft, g).CIGet(context.Background(), "web01", read.Options{Fields: []string{"ip_address"}})
-	if err != nil || got["name"] != "web01" {
+	if err != nil || text(got["name"]) != "web01" {
 		t.Fatalf("%v %v", got, err)
 	}
 	if len(g.Requests[0].Fields) != 4 { // ip_address + sys_id, name, sys_class_name
@@ -240,7 +240,7 @@ func TestAppResolvesServiceThenApplicationAndListsRelated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Application["owned_by"] != "Ann" || got.Application["support_group"] != "Platform" || len(got.Related.Nodes) != 1 || got.Related.Depth != 1 {
+	if text(got.Application["owned_by"]) != "Ann" || text(got.Application["support_group"]) != "Platform" || len(got.Related.Nodes) != 1 || got.Related.Depth != 1 {
 		t.Errorf("got %+v", got)
 	}
 	if r := g.Requests[0]; r.Verb != "get" || r.Resource != "cmdb:app" {
@@ -251,11 +251,11 @@ func TestAppResolvesServiceThenApplicationAndListsRelated(t *testing.T) {
 	}
 	// Falls through to cmdb_ci_appl.
 	got, err = s.App(context.Background(), "Payments", read.Options{})
-	if err != nil || got.Application["name"] != "Payments" {
+	if err != nil || text(got.Application["name"]) != "Payments" {
 		t.Errorf("appl fallback: %+v %v", got, err)
 	}
 	// By sys_id.
-	if got, err = s.App(context.Background(), sid2, read.Options{}); err != nil || got.Application["name"] != "Payments" {
+	if got, err = s.App(context.Background(), sid2, read.Options{}); err != nil || text(got.Application["name"]) != "Payments" {
 		t.Errorf("by sys_id: %+v %v", got, err)
 	}
 	if _, err := s.App(context.Background(), "Nope", read.Options{}); exitOf(t, err) != output.ExitNotFound {

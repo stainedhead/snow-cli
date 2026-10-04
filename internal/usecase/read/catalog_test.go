@@ -85,7 +85,7 @@ func TestCatalogSearchPagesAndMarksDescriptionUntrusted(t *testing.T) {
 	if _, ok := got.Items[0]["short_description"].(output.Untrusted); !ok {
 		t.Errorf("short_description = %T, want output.Untrusted", got.Items[0]["short_description"])
 	}
-	if got.Items[0]["name"] != "Laptop" || got.Items[0]["sys_id"] != sid1 {
+	if text(got.Items[0]["name"]) != "Laptop" || got.Items[0]["sys_id"] != sid1 {
 		t.Errorf("item = %v", got.Items[0])
 	}
 	if r := g.Requests[0]; r.Verb != "search" || r.Resource != "catalog:search" {
@@ -116,7 +116,7 @@ func TestCatalogSearchDeniedAndErrors(t *testing.T) {
 func TestCatalogGetBySysIDChecksItemResource(t *testing.T) {
 	fc, g := newCatalogFake(), newGuard(t, allowAll)
 	got, err := csvc(t, fc, g).CatalogGet(context.Background(), sid1)
-	if err != nil || got["name"] != "Laptop" {
+	if err != nil || text(got["name"]) != "Laptop" {
 		t.Fatalf("%v %v", got, err)
 	}
 	if r := g.Requests[0]; r.Verb != "get" || r.Resource != "catalog:item:"+sid1 {
@@ -159,7 +159,7 @@ func TestCatalogGetByNameNotFoundOrAmbiguous(t *testing.T) {
 func TestCatalogVars(t *testing.T) {
 	fc, g := newCatalogFake(), newGuard(t, allowAll)
 	got, err := csvc(t, fc, g).CatalogVars(context.Background(), sid1)
-	if err != nil || len(got.Variables) != 1 || !got.Variables[0].Mandatory || got.Item["sys_id"] != sid1 || got.Item["name"] != "Laptop" {
+	if err != nil || len(got.Variables) != 1 || !got.Variables[0].Mandatory || got.Item["sys_id"] != sid1 || text(got.Item["name"]) != "Laptop" {
 		t.Fatalf("%+v %v", got, err)
 	}
 	if r := g.Requests[0]; r.Verb != "vars" || r.Resource != "catalog:item:"+sid1 {

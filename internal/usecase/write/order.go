@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/agent-cli-core/policy"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/policymap"
@@ -34,8 +35,8 @@ func (s OrderService) Order(ctx context.Context, item string, vars map[string]st
 		return domain.WriteResult{}, err
 	}
 	it := domain.CatalogItem{}
-	it.SysID, _ = vd.Item["sys_id"].(string)
-	it.Name, _ = vd.Item["name"].(string)
+	it.SysID = plainText(vd.Item["sys_id"])
+	it.Name = plainText(vd.Item["name"])
 	defs := vd.Variables
 	if err := validateVariables(defs, vars); err != nil {
 		return domain.WriteResult{}, err
@@ -85,4 +86,14 @@ func validateVariables(defs []domain.CatalogVariable, vars map[string]string) er
 		}
 	}
 	return nil
+}
+
+// plainText reads a string out of a read-service value, which may be marked
+// output.Untrusted (the item name is text written by catalog authors).
+func plainText(v any) string {
+	if u, ok := v.(output.Untrusted); ok {
+		return u.Value
+	}
+	s, _ := v.(string)
+	return s
 }

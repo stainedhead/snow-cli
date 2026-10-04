@@ -167,3 +167,12 @@ const sid3 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 type denied struct{ error }
 
 func (denied) Category() output.Category { return output.CategoryPolicyDenied }
+
+// text returns the string of a plain or output.Untrusted value.
+func text(v any) string {
+	if u, ok := v.(output.Untrusted); ok {
+		return u.Value
+	}
+	s, _ := v.(string)
+	return s
+}
