@@ -26,10 +26,10 @@ func TestGoModModuleAndGoVersion(t *testing.T) {
 	}
 }
 
-func TestGoModRequiresCoreV020(t *testing.T) {
+func TestGoModRequiresCoreV021(t *testing.T) {
 	mod := readGoMod(t)
-	if !regexp.MustCompile(`github\.com/stainedhead/agent-cli-core v0\.2\.0\b`).MatchString(mod) {
-		t.Errorf("go.mod must require agent-cli-core v0.2.0:\n%s", mod)
+	if !regexp.MustCompile(`github\.com/stainedhead/agent-cli-core v0\.2\.1\b`).MatchString(mod) {
+		t.Errorf("go.mod must require agent-cli-core v0.2.1:\n%s", mod)
 	}
 }
 

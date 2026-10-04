@@ -201,41 +201,8 @@ func tokenSource(o Options, prof config.Resolved) (auth.TokenSource, error) {
 	if dc == nil {
 		dc = newDaemonClient(prof.Daemon.Socket)
 	}
-	src, err := auth.NewDaemonTokenSource(dc, prof.Daemon.Provider,
+	return auth.NewDaemonTokenSource(dc, prof.Daemon.Provider,
 		auth.WithRemediation("Re-enroll the agent credential with the agent-okta-d operator."))
-	if err != nil {
-		return nil, err
-	}
-	return daemonErrors{src}, nil
-}
-
-// daemonErrors keeps the adapter's own classes visible. auth.DaemonTokenSource
-// wraps every error other than unreachable, reauth and revoked in an auth
-// category *auth.TokenError, which would turn the adapter's retryable
-// *oktad.TransientError (exit 8) into exit 3 and hide *oktad.AccessError's own
-// hint. Both are returned as the adapter built them (CR-13).
-type daemonErrors struct{ src *auth.DaemonTokenSource }
-
-func (d daemonErrors) Token(ctx context.Context) (auth.Token, error) {
-	t, err := d.src.Token(ctx)
-	return t, adapterClass(err)
-}
-
-func (d daemonErrors) Refresh(ctx context.Context) (auth.Token, error) {
-	t, err := d.src.Refresh(ctx)
-	return t, adapterClass(err)
-}
-
-func adapterClass(err error) error {
-	var te *oktad.TransientError
-	if errors.As(err, &te) {
-		return te
-	}
-	var ae *oktad.AccessError
-	if errors.As(err, &ae) {
-		return ae
-	}
-	return err
 }
 
 func loadPolicy(o Options, g cli.GlobalFlags, prof config.Resolved) (*policy.Policy, error) {

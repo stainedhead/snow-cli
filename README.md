@@ -35,7 +35,7 @@ The PRD uses an evidence legend: items marked confirmed were checked against ven
 
 ## Shared core: agent-cli-core (build dependency)
 
-`snow` is built on [agent-cli-core](https://github.com/stainedhead/agent-cli-core), a separate Go library repository (auth, policy, output, audit, httpx, selftest, docgen) that also serves `outlook` and `teams`. It originated in PRD section 5, and its own PRD now owns the specification. `snow` requires the released tag `agent-cli-core v0.2.0` (no `replace`, no pseudo-version). Gaps found in the core are listed in [docs/core-change-requests.md](docs/core-change-requests.md); what is not built is in [docs/deferred.md](docs/deferred.md).
+`snow` is built on [agent-cli-core](https://github.com/stainedhead/agent-cli-core), a separate Go library repository (auth, policy, output, audit, httpx, selftest, docgen) that also serves `outlook` and `teams`. It originated in PRD section 5, and its own PRD now owns the specification. `snow` requires the released tag `agent-cli-core v0.2.1` (no `replace`, no pseudo-version). Gaps found in the core are listed in [docs/core-change-requests.md](docs/core-change-requests.md); what is not built is in [docs/deferred.md](docs/deferred.md).
 
 ## Related repositories
 

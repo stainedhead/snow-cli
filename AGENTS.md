@@ -14,7 +14,7 @@ Status: implemented and tested against fakes only (not yet run against a real Se
 
 - Core changes are made in `agent-cli-core`, never copied into this repository.
 - Depend on released tags only: no pseudo-versions, no `replace` directives on `main`.
-- `go.mod` requires `agent-cli-core v0.2.0`; a core bump is an ordinary PR.
+- `go.mod` requires `agent-cli-core v0.2.1`; a core bump is an ordinary PR.
 - If the core PRD and PRD section 5 differ, the core PRD wins.
 
 ## Layout

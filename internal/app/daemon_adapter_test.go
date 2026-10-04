@@ -5,6 +5,7 @@ package app
 // the daemon's own fake on a real unix socket.
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/stainedhead/agent-cli-core/auth/oktad"
 	"github.com/stainedhead/agent-okta-d/pkg/client/clienttest"
+	"github.com/stainedhead/snow-cli/internal/cli"
 	"github.com/stainedhead/snow-cli/internal/testsupport/snfake"
 )
 
@@ -148,8 +150,8 @@ func TestDaemonAdapterErrorsMapToExitCodes(t *testing.T) {
 		{"reauth_required", clienttest.Error{Code: clienttest.CodeReauthRequired}, 3, "Re-enroll the agent credential"},
 		{"revoked", clienttest.Error{Code: clienttest.CodeRevoked}, 3, "Re-enroll the agent credential"},
 		{"degraded", clienttest.Error{Code: clienttest.CodeDegraded, State: "degraded", RetryAfter: 30 * time.Second}, 8, "30"},
-		{"not_configured", clienttest.Error{Code: clienttest.CodeNotConfigured}, 3, ""},
-		{"unauthorized", clienttest.Error{Code: clienttest.CodeUnauthorized}, 3, ""},
+		{"not_configured", clienttest.Error{Code: clienttest.CodeNotConfigured}, 3, "Check that the provider name is right"},
+		{"unauthorized", clienttest.Error{Code: clienttest.CodeUnauthorized}, 3, "administrator to authorize this agent"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -172,5 +174,20 @@ func TestDaemonAdapterErrorsMapToExitCodes(t *testing.T) {
 				t.Error("no request may be sent without a token")
 			}
 		})
+	}
+}
+
+func TestDaemonAdapterCancelledContextIsGeneralExit1(t *testing.T) {
+	d := serveToken(t)
+	i := agentItg(t, d.SocketPath())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r := cli.NewRouter(cli.Options{EnvFactory: NewEnvFactory(i.opts), Stdout: &i.out, Stderr: &i.errb})
+	cli.RegisterAll(r)
+	if code := r.Execute(ctx, []string{"incident", "list", "--fields", "number", "--config", i.cfg}); code != 1 {
+		t.Fatalf("exit %d, want 1: %s", code, i.out.String())
+	}
+	if len(i.f.Requests()) != 0 {
+		t.Error("no request may be sent")
 	}
 }

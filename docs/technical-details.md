@@ -1,6 +1,6 @@
 # Technical details
 
-Module `github.com/stainedhead/snow-cli`, Go 1.27, direct dependencies besides the shared core: `github.com/goccy/go-yaml` (strict config) and, for tests only, `github.com/stainedhead/agent-okta-d` (`clienttest` fake daemon). Requires `github.com/stainedhead/agent-cli-core v0.2.0` (which brings `agent-okta-d v0.1.0` for its `oktad` adapter) with no `replace` and no pseudo-version.
+Module `github.com/stainedhead/snow-cli`, Go 1.27, direct dependencies besides the shared core: `github.com/goccy/go-yaml` (strict config) and, for tests only, `github.com/stainedhead/agent-okta-d` (`clienttest` fake daemon). Requires `github.com/stainedhead/agent-cli-core v0.2.1` (which brings `agent-okta-d v0.1.0` for its `oktad` adapter) with no `replace` and no pseudo-version.
 
 ## Package layout (dependencies point inward)
 
