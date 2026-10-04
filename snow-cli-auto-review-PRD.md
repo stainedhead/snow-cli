@@ -8,7 +8,11 @@ The implementation is structurally sound: dependencies point inward, the core en
 
 The material risks are guardrail gaps that make documented controls weaker than they read: Okta calls run on a plain HTTP client with no host or redirect restriction; per-hour and per-run write limits cannot work across separate CLI processes; catalog order reads and selftest write probes run outside the policy and audit guard; the encoded-query pass-through is a small blacklist; an agent can choose `--policy human`; retried create POSTs can duplicate after a lost response; and a reported "conflict" happens after the PATCH was applied.
 
-Counts: P0 = 0, P1 = 8, P2 = 7.
+Counts (verified against section 2): P0 = 0, P1 = 8 (FR-R01..FR-R08), P2 = 7 (FR-R09..FR-R15), total 15.
+
+Non-goals: no change to agent-cli-core, the root skills/snow-cli.md, the ServiceNow scoped app, native Windows support, or release workflows; no live ServiceNow/Okta testing.
+
+Priority rule: P0 = blocks any use or release (data loss, credential leak in default config, broken build); P1 = weakens a documented security or data-integrity control; P2 = hardening, accuracy, hygiene.
 
 ## 2. Functional Requirements (one per finding)
 
@@ -74,7 +78,7 @@ Acceptance: replace `Keychain any` with `humanauth.Store` (or a port interface i
 
 **FR-R15 (P2) Documentation accuracy and hygiene.**
 Evidence: `user-docs/configuration.md` line about `per_hour` implies working enforcement (see FR-R02); `docs/ws-b-requests.md` .. `ws-e-requests.md` are internal stream hand-off notes left in docs/; README links into `specs/261003-snow-cli/` which will move on archive; docs describe retry-safety of create without the lost-response caveat (FR-R07) and the conflict wording without "already applied" (FR-R08). user-docs themselves contain no links into specs and no design material (rule satisfied).
-Acceptance: after the fixes above, re-read docs/technical-details.md, ADR and user-docs against the code and correct every statement that changed; fold applied ws-*-requests content into the ADR or delete the files; make README links survive archive (point to docs/ or the archive path); update docs/assumptions.md for any new ASSUMPTION; keep user-docs free of design material and spec links.
+Acceptance: (a) every docs/technical-details.md, ADR and user-docs statement touched by FR-R01..R14 matches the final code (checked by a docs review pass listing each changed statement); (b) docs/ws-*-requests.md are folded into the ADR or deleted, none remain; (c) README has no link to the pre-archive `specs/261003-snow-cli/` path (grep returns none; links use specs/archive/); (d) docs/assumptions.md lists every new ASSUMPTION and the assumption test still passes; (e) user-docs contain no links into specs/ and no design material (grep check).
 
 ## 3. Guidance for the fix phase
 
@@ -83,3 +87,21 @@ Acceptance: after the fixes above, re-read docs/technical-details.md, ADR and us
 - Use agent teammates: assign one agent per workstream below and a separate reviewer agent; agents report back with the exact commits.
 - Use git worktrees for parallel workstreams, each on its own branch from feat/snow-cli, merged back after review. Suggested streams: (A) transport and auth: R01, R09; (B) guard, policy and audit: R02, R03, R04, R06, R10; (C) query and read paths: R05, R12, R13; (D) writes and idempotency: R07, R08, R11; (E) types, tests and docs: R14, R15 (last, after A-D merge). Streams A, C and D are independent; B touches `auditx` and `app` and should merge before E.
 - Do not edit agent-cli-core (record needs in docs/core-change-requests.md); do not touch the root skills/snow-cli.md.
+
+## 4. Non-functional requirements
+
+- Security: FR-R01, R03-R06, R09, R12 close token-leak, bypass and injection paths; no new secret appears in logs or audit.
+- Reliability: FR-R07, R08, R11 make retries and conflicts safe; no change may increase duplicate-write risk.
+- Performance: no added round trips beyond one pre-write read (FR-R08) and one dedupe lookup per create retry (FR-R07).
+- Observability: FR-R04, R10 make every request auditable; dry-run is distinguishable.
+- Quality gates: build, vet, gofmt, golangci-lint, `go test -race ./...` green; usecase coverage >= 90%.
+
+## 5. Dependencies
+
+agent-cli-core v0.1.0 (read-only; changes go to docs/core-change-requests.md); Go 1.27; golangci-lint v2; httptest fakes only.
+
+## 6. Open questions
+
+1. FR-R02: file-based or audit-log-derived cross-process counters, or defer with docs (option b)? Decide before stream B starts.
+2. FR-R06: is an explicit `policy.allow_override` config key acceptable, or should `--policy` be removed in agent mode?
+3. FR-R10: does core accept an outcome label `dry_run`, or is the resource-suffix workaround permanent?
