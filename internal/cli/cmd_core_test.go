@@ -38,6 +38,8 @@ func (f fakeIdentity) Whoami(context.Context) (domain.Identity, error) { return 
 
 type allowGuard struct{}
 
+func (allowGuard) AllowedFields(string, string) []string { return nil }
+
 func (allowGuard) Run(ctx context.Context, _ usecase.Action, fn usecase.ActionFunc) error {
 	_, err := fn(ctx, policy.Decision{Allowed: true})
 	return err

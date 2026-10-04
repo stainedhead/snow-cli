@@ -6,6 +6,7 @@ package usecase
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/stainedhead/agent-cli-core/policy"
@@ -144,6 +145,10 @@ func (k ActionKind) String() string {
 type Action struct {
 	Kind    ActionKind
 	Request policy.Request
+	// Ref is the target record reference (number or sys_id) for the audit
+	// record only; the guard logs ResourceRef(Request.Resource, Ref) while
+	// policy keeps matching on Request.Resource. Empty means no suffix.
+	Ref string
 }
 
 // ActionFunc performs the operation after policy allowed (or dry-run-only
@@ -156,4 +161,89 @@ type ActionFunc func(ctx context.Context, d policy.Decision) (httpStatus int, er
 // the use case previews instead of sending.
 type Guard interface {
 	Run(ctx context.Context, a Action, fn ActionFunc) error
+	// AllowedFields reports the field allowlist of the policy rule that would
+	// decide verb on resource (nil when unrestricted), so an omitted --fields
+	// is replaced by the allowlist (spec D-f).
+	AllowedFields(verb, resource string) []string
+}
+
+// PolicyErrorAdapter turns a policy denial found in err into the
+// policy_denied (exit 6) error; other errors pass through unchanged. It keeps
+// adapters such as internal/sn out of the CLI layer.
+type PolicyErrorAdapter interface {
+	AdaptPolicyError(err error) error
+}
+
+// PolicyErrorFunc adapts a function to PolicyErrorAdapter.
+type PolicyErrorFunc func(err error) error
+
+// AdaptPolicyError calls f.
+func (f PolicyErrorFunc) AdaptPolicyError(err error) error { return f(err) }
+
+// ResourceRef forms the audit resource for a target record: base alone when
+// ref is empty, else "base:ref" (for example incident:INC0010001).
+func ResourceRef(base, ref string) string {
+	if ref == "" {
+		return base
+	}
+	return base + ":" + ref
+}
+
+// Outcome is an audit outcome label a use case may set for the action it ran,
+// overriding the guard's default ("ok"/"error").
+type Outcome string
+
+// Audit outcome labels (the guard maps them onto the audit record).
+const (
+	// OutcomeDryRun marks a preview: nothing was sent.
+	OutcomeDryRun Outcome = "dry_run"
+	// OutcomeAppliedConflict marks a write that was applied but whose
+	// sys_mod_count moved more than expected.
+	OutcomeAppliedConflict Outcome = "applied_conflict"
+)
+
+// OutcomeSink records the Outcome set by the running action.
+type OutcomeSink struct {
+	mu sync.Mutex
+	o  Outcome
+}
+
+// Outcome returns the recorded outcome ("" when none was set).
+func (s *OutcomeSink) Outcome() Outcome {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.o
+}
+
+type outcomeKey struct{}
+
+// WithOutcomeSink returns a context carrying a fresh sink. A Guard calls it
+// before running the action and reads the sink afterwards.
+func WithOutcomeSink(ctx context.Context) (context.Context, *OutcomeSink) {
+	s := &OutcomeSink{}
+	return context.WithValue(ctx, outcomeKey{}, s), s
+}
+
+// SetOutcome records o on the sink in ctx; without a sink it does nothing.
+func SetOutcome(ctx context.Context, o Outcome) {
+	if s, ok := ctx.Value(outcomeKey{}).(*OutcomeSink); ok {
+		s.mu.Lock()
+		s.o = o
+		s.mu.Unlock()
+	}
+}
+
+// CatalogVars is the data of `catalog vars`: the item (sys_id, name) and its
+// variables.
+type CatalogVars struct {
+	Item      map[string]any           `json:"item"`
+	Variables []domain.CatalogVariable `json:"variables"`
+}
+
+// GuardedCatalog is the policy-checked, audited catalog read surface (the read
+// service). Write use cases that need catalog data (order) take this, never the
+// raw CatalogReader.
+type GuardedCatalog interface {
+	CatalogGet(ctx context.Context, ref string) (map[string]any, error)
+	CatalogVars(ctx context.Context, ref string) (CatalogVars, error)
 }

@@ -51,18 +51,22 @@ func (fakeAll) Now() time.Time                                  { return time.Ti
 func (fakeAll) NewID() string                                   { return "id" }
 
 var (
-	_ usecase.TableReader    = fakeAll{}
-	_ usecase.CatalogReader  = fakeAll{}
-	_ usecase.IncidentWriter = fakeAll{}
-	_ usecase.TaskWriter     = fakeAll{}
-	_ usecase.OrderWriter    = fakeAll{}
-	_ usecase.Identity       = fakeAll{}
-	_ usecase.Clock          = fakeAll{}
-	_ usecase.IDGen          = fakeAll{}
-	_ usecase.Guard          = fakeGuard{}
+	_ usecase.TableReader        = fakeAll{}
+	_ usecase.CatalogReader      = fakeAll{}
+	_ usecase.IncidentWriter     = fakeAll{}
+	_ usecase.TaskWriter         = fakeAll{}
+	_ usecase.OrderWriter        = fakeAll{}
+	_ usecase.Identity           = fakeAll{}
+	_ usecase.Clock              = fakeAll{}
+	_ usecase.IDGen              = fakeAll{}
+	_ usecase.Guard              = fakeGuard{}
+	_ usecase.GuardedCatalog     = fakeCatalogReads{}
+	_ usecase.PolicyErrorAdapter = usecase.PolicyErrorFunc(nil)
 )
 
 type fakeGuard struct{ ran *bool }
+
+func (g fakeGuard) AllowedFields(string, string) []string { return nil }
 
 func (g fakeGuard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
 	*g.ran = true
@@ -86,5 +90,48 @@ func TestGuardContract(t *testing.T) {
 		func(context.Context, policy.Decision) (int, error) { return 500, want })
 	if !ran || !errors.Is(err, want) {
 		t.Errorf("ran=%v err=%v", ran, err)
+	}
+}
+
+type fakeCatalogReads struct{}
+
+func (fakeCatalogReads) CatalogGet(context.Context, string) (map[string]any, error) { return nil, nil }
+func (fakeCatalogReads) CatalogVars(context.Context, string) (usecase.CatalogVars, error) {
+	return usecase.CatalogVars{}, nil
+}
+
+func TestPolicyErrorFunc(t *testing.T) {
+	wrapped := errors.New("adapted")
+	f := usecase.PolicyErrorFunc(func(error) error { return wrapped })
+	if !errors.Is(f.AdaptPolicyError(errors.New("x")), wrapped) {
+		t.Error("func adapter must delegate")
+	}
+}
+
+func TestResourceRef(t *testing.T) {
+	if got := usecase.ResourceRef("incident", "INC0010001"); got != "incident:INC0010001" {
+		t.Errorf("got %q", got)
+	}
+	if got := usecase.ResourceRef("incident", ""); got != "incident" {
+		t.Errorf("empty ref keeps base, got %q", got)
+	}
+	a := usecase.Action{Kind: usecase.Write, Ref: "INC1"}
+	if a.Ref != "INC1" {
+		t.Error("Action.Ref carries the target reference; policy matches Request.Resource only")
+	}
+}
+
+func TestOutcomeSink(t *testing.T) {
+	ctx, sink := usecase.WithOutcomeSink(context.Background())
+	if sink.Outcome() != "" {
+		t.Error("default outcome empty")
+	}
+	usecase.SetOutcome(ctx, usecase.OutcomeDryRun)
+	if sink.Outcome() != usecase.OutcomeDryRun {
+		t.Errorf("got %q", sink.Outcome())
+	}
+	usecase.SetOutcome(context.Background(), usecase.OutcomeAppliedConflict) // no sink: no-op
+	if usecase.OutcomeDryRun != "dry_run" || usecase.OutcomeAppliedConflict != "applied_conflict" {
+		t.Error("outcome labels are part of the audit contract")
 	}
 }

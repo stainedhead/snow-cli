@@ -18,14 +18,14 @@ type fakeCatalog struct {
 	varsErr error
 }
 
-func (f fakeCatalog) Search(context.Context, string, int, int) ([]domain.CatalogItem, error) {
-	return nil, nil
+func (f fakeCatalog) CatalogGet(context.Context, string) (map[string]any, error) {
+	return nil, f.itemErr
 }
-func (f fakeCatalog) Item(_ context.Context, item string) (domain.CatalogItem, error) {
-	return domain.CatalogItem{SysID: itemID, Name: item}, f.itemErr
-}
-func (f fakeCatalog) Variables(context.Context, string) ([]domain.CatalogVariable, error) {
-	return f.vars, f.varsErr
+func (f fakeCatalog) CatalogVars(_ context.Context, item string) (usecase.CatalogVars, error) {
+	if f.itemErr != nil {
+		return usecase.CatalogVars{}, f.itemErr
+	}
+	return usecase.CatalogVars{Item: map[string]any{"sys_id": itemID, "name": item}, Variables: f.vars}, f.varsErr
 }
 
 type fakeOrders struct {

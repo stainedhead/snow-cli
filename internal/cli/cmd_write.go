@@ -255,7 +255,7 @@ func RegisterWrite(r *Router) {
 			if e.Orders == nil || e.Catalog == nil {
 				return Result{}, notWired("catalog order")
 			}
-			svc := write.OrderService{Base: writeBase(c), Catalog: e.Catalog, Writer: e.Orders, IdempotencyKey: c.Global.IdempotencyKey}
+			svc := write.OrderService{Base: writeBase(c), Catalog: readService(c), Writer: e.Orders, IdempotencyKey: c.Global.IdempotencyKey}
 			res, err := svc.Order(ctx, item, flagKV(c, "var"))
 			return Result{Data: res}, err
 		},

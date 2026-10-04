@@ -48,7 +48,7 @@ func (w *wTasks) FetchTask(context.Context, string) (domain.Record, error) {
 type wCatalog struct{}
 
 func (wCatalog) Search(context.Context, string, int, int) ([]domain.CatalogItem, error) {
-	return nil, nil
+	return []domain.CatalogItem{{SysID: strings.Repeat("c", 32), Name: "Laptop"}}, nil
 }
 func (wCatalog) Item(context.Context, string) (domain.CatalogItem, error) {
 	return domain.CatalogItem{SysID: strings.Repeat("c", 32), Name: "Laptop"}, nil

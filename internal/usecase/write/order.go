@@ -13,7 +13,9 @@ import (
 // OrderService orders catalog items (FR-046).
 type OrderService struct {
 	Base
-	Catalog usecase.CatalogReader
+	// Catalog is the guarded read service: item resolution and variable
+	// definitions go through policy and audit (FR-R03).
+	Catalog usecase.GuardedCatalog
 	Writer  usecase.OrderWriter
 	// IdempotencyKey is passed through as the order correlation id. Order
 	// POSTs are never retried and never deduplicated until A-07 is confirmed.
@@ -27,14 +29,14 @@ func (s OrderService) Order(ctx context.Context, item string, vars map[string]st
 	if blank(item) {
 		return domain.WriteResult{}, invalid("a catalog item name or sys_id is required")
 	}
-	it, err := s.Catalog.Item(ctx, item)
+	vd, err := s.Catalog.CatalogVars(ctx, item)
 	if err != nil {
 		return domain.WriteResult{}, err
 	}
-	defs, err := s.Catalog.Variables(ctx, it.SysID)
-	if err != nil {
-		return domain.WriteResult{}, err
-	}
+	it := domain.CatalogItem{}
+	it.SysID, _ = vd.Item["sys_id"].(string)
+	it.Name, _ = vd.Item["name"].(string)
+	defs := vd.Variables
 	if err := validateVariables(defs, vars); err != nil {
 		return domain.WriteResult{}, err
 	}

@@ -45,6 +45,8 @@ func newGuard(t *testing.T, y string) *guard {
 	return &guard{eng: policy.NewEngine(p, nil)}
 }
 
+func (g *guard) AllowedFields(string, string) []string { return nil }
+
 func (g *guard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
 	g.calls = append(g.calls, a.Request)
 	d := g.eng.Check(a.Request)

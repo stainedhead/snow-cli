@@ -18,6 +18,8 @@ type engineGuard struct {
 	actions []usecase.Action
 }
 
+func (g *engineGuard) AllowedFields(string, string) []string { return nil }
+
 func (g *engineGuard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
 	g.actions = append(g.actions, a)
 	d := g.eng.Check(a.Request)

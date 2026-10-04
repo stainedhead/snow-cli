@@ -8,6 +8,7 @@ import (
 	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/policymap"
+	"github.com/stainedhead/snow-cli/internal/usecase"
 )
 
 // searchPageProbe is how many catalog hits are fetched when resolving an
@@ -111,10 +112,7 @@ func (s Service) CatalogGet(ctx context.Context, ref string) (map[string]any, er
 }
 
 // VarsData is the data of `catalog vars`.
-type VarsData struct {
-	Item      map[string]any           `json:"item"`
-	Variables []domain.CatalogVariable `json:"variables"`
-}
+type VarsData = usecase.CatalogVars
 
 // CatalogVars lists the variables of a catalog item.
 func (s Service) CatalogVars(ctx context.Context, ref string) (VarsData, error) {

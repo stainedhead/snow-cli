@@ -38,6 +38,8 @@ func newGuard(t *testing.T, yaml string) *policyGuard {
 	return &policyGuard{t: t, eng: policy.NewEngine(p, nil)}
 }
 
+func (g *policyGuard) AllowedFields(string, string) []string { return nil }
+
 func (g *policyGuard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
 	g.Requests = append(g.Requests, a.Request)
 	if a.Kind != usecase.Read {

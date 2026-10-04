@@ -34,15 +34,6 @@ type Service struct {
 	RelatedNodeCap int
 }
 
-// FieldAllowlister is an optional capability of the Guard: it reports the
-// field allowlist the policy applies to a verb and resource, so that an
-// omitted --fields is replaced by the allowlist and the tool never reads
-// outside it (spec D-f). The guard in internal/auditx does not implement it
-// yet; see docs/ws-b-requests.md.
-type FieldAllowlister interface {
-	AllowedFields(verb, resource string) []string
-}
-
 // Options tunes a single-record read.
 type Options struct {
 	Fields  []string
@@ -94,10 +85,8 @@ func (s Service) effectiveFields(verb, resource string, requested, defaults []st
 	if len(requested) > 0 {
 		return dedupe(requested)
 	}
-	if a, ok := s.Guard.(FieldAllowlister); ok {
-		if f := a.AllowedFields(verb, resource); len(f) > 0 {
-			return dedupe(f)
-		}
+	if f := s.Guard.AllowedFields(verb, resource); len(f) > 0 {
+		return dedupe(f)
 	}
 	return dedupe(defaults)
 }

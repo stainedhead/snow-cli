@@ -25,6 +25,8 @@ type recGuard struct {
 	ranFn bool
 }
 
+func (g *recGuard) AllowedFields(string, string) []string { return nil }
+
 func (g *recGuard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
 	g.got = a
 	if g.deny != nil {
