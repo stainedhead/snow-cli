@@ -53,7 +53,7 @@ func TestOrderAuditShowsTheGuardedReadsBeforeTheOrder(t *testing.T) {
 		verbs = append(verbs, l["verb"].(string)+":"+l["outcome"].(string))
 	}
 	got := strings.Join(verbs, ",")
-	if !strings.HasPrefix(got, "vars:ok,order:pending,order:ok") {
+	if !strings.HasPrefix(got, "vars:ok,order:pending,order:dry_run") {
 		t.Errorf("audit sequence = %s, want the vars read before the order", got)
 	}
 }
