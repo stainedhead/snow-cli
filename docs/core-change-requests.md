@@ -1,6 +1,6 @@
 # Requests to agent-cli-core
 
-`snow` pins `agent-cli-core v0.1.0` and never edits it. Each item is a gap found while reading the core or implementing the spec, with the workaround used here. Open them against the core repository; none block the build.
+`snow` pins `agent-cli-core v0.2.1` and never edits it. Each item is a gap found while reading the core or implementing the spec, with the workaround used here. Open them against the core repository; none block the build.
 
 | ID | Request | Workaround in snow |
 |---|---|---|
@@ -16,3 +16,4 @@
 | CR-10 | First-class audit fields for the target reference and for the outcomes `dry_run` and `applied_conflict` (FR-R10, FR-R08). | The resource carries `<base>:<ref>` and the outcome is a free-text label, which the core record accepts. |
 | CR-11 | Cross-process rate-limit state in the policy engine (or an injectable counter store) (FR-R02). | `auditx.StateLimiter`: flock-protected `ratelimit.json` next to the audit log; unix only, fails closed elsewhere. |
 | CR-12 | `output.fit` honouring a caller-set `Meta.Truncated`/`NextOffset` for object data (R-04, same family as CR-03/CR-04). | `read.Fit` reports truncation in `data.truncated` and `data.page.next_offset`; `meta.truncated` stays false for object data. |
+| CR-13 | Resolved in core v0.2.1. `auth.DaemonTokenSource` wrapped `*oktad.TransientError` (exit 8) and `*oktad.AccessError` in an auth-category `TokenError`, giving a generic exit 3. | None needed: categorized errors now pass through unwrapped and a cancelled context is a general error (exit 1). |

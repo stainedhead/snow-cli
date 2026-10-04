@@ -9,6 +9,6 @@ Implemented and tested against fakes, `httptest` servers and the core's `authtes
 Usable now: all read commands, all write commands, `selftest`, `skill generate`, human mode (with `--insecure-store`).
 Not usable end to end: agent mode against a real instance (the daemon adapter is a fail-closed stub, exit 3), and human mode without `--insecure-store` (real OS keychain backends are fail-closed stubs). See `deferred.md`.
 
-Built on `github.com/stainedhead/agent-cli-core` v0.1.0 for the output envelope and exit codes, auth interfaces, policy engine, audit log, HTTP transport, selftest runner and skill generator.
+Built on `github.com/stainedhead/agent-cli-core` v0.2.1 for the output envelope and exit codes, auth interfaces, policy engine, audit log, HTTP transport, selftest runner and skill generator.
 
 Source requirements: [snow-cli-PRD.md](../specs/archive/261003-snow-cli/snow-cli-PRD.md) (Draft v0.1) and [spec.md](../specs/archive/261003-snow-cli/spec.md).

@@ -17,10 +17,10 @@ import (
 
 	"github.com/stainedhead/agent-cli-core/audit"
 	"github.com/stainedhead/agent-cli-core/auth"
+	"github.com/stainedhead/agent-cli-core/auth/oktad"
 	"github.com/stainedhead/agent-cli-core/httpx"
 	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/agent-cli-core/policy"
-	"github.com/stainedhead/snow-cli/internal/agentauth"
 	"github.com/stainedhead/snow-cli/internal/auditx"
 	"github.com/stainedhead/snow-cli/internal/cli"
 	"github.com/stainedhead/snow-cli/internal/config"
@@ -43,7 +43,7 @@ type Options struct {
 
 	// Test seams.
 	Insecure     bool              // http to a loopback instance (httptest)
-	DaemonClient auth.DaemonClient // overrides the stub daemon client
+	DaemonClient auth.DaemonClient // overrides the agent-okta-d adapter
 	Base         http.RoundTripper // underlying transport
 	Transport    httpx.Config      // retry tuning
 	AuditWriter  io.Writer         // replaces the audit file (failure injection in tests)
@@ -63,8 +63,14 @@ type built struct {
 	client *sn.Client
 }
 
+// daemonTimeout bounds one request to the credential daemon.
+const daemonTimeout = 5 * time.Second
+
+// newDaemonClient returns the core's agent-okta-d adapter. socket is the
+// profile's daemon.socket; when empty the adapter takes AGENT_OKTA_D_SOCKET,
+// then the platform default.
 func newDaemonClient(socket string) auth.DaemonClient {
-	return agentauth.NewUnavailableClient(socket)
+	return oktad.New(oktad.WithSocketPath(socket), oktad.WithTimeout(daemonTimeout))
 }
 
 // NewEnvFactory returns the cli.EnvFactory for the process.

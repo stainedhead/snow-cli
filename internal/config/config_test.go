@@ -89,7 +89,7 @@ func TestDefaults(t *testing.T) {
 	if p.Okta.TokenType != "access" {
 		t.Errorf("token type default = %q (A-05)", p.Okta.TokenType)
 	}
-	if p.Daemon.Provider != "snow" || p.Daemon.Socket == "" {
+	if p.Daemon.Provider != "snow" || p.Daemon.Socket != "" {
 		t.Errorf("daemon defaults = %+v", p.Daemon)
 	}
 }

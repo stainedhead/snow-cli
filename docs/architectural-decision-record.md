@@ -14,7 +14,7 @@ Proposed (drafted here, needs review), Open (undecided, tracked elsewhere).
 
 ## ADR-002 Agent-mode daemon client is a fail-closed stub
 
-- Status: Accepted (revisit when the real adapter is released)
+- Status: Superseded by ADR-017
 - Context: agent mode takes its Okta token from the `agent-okta-d` daemon through the core's `auth.DaemonClient` / `auth.TokenSource` interfaces. The core defines the interfaces, but the real adapter (and the `agent-okta-d` `pkg/client` release it needs) does not exist yet.
 - Decision: the composition root has a `newDaemonClient()` that returns a client reporting the daemon unavailable. It surfaces the core's unreachable error (exit 3, category `auth`) and the message names the configured `daemon.socket` path. `agent-okta-d` is NOT added to `go.mod`. `app.Options.DaemonClient` is the test seam; tests use the core's `authtest.Fake`. Nothing in `snow` fabricates, caches or reads a token on its own, so there is no "pretend it works" path.
 - Consequences: in this release an agent-mode command that reaches ServiceNow exits 3 against a real instance until the adapter lands. Human mode and all fake-server tests are unaffected. Replacing the stub is a one-function change in the composition root plus the `go.mod` require; it is listed in `docs/deferred.md`. The agent skill must say the agent mode is not usable end to end until then (`docs/root-skill-update-needed.md`).
@@ -110,3 +110,10 @@ Proposed (drafted here, needs review), Open (undecided, tracked elsewhere).
 
 - Status: Accepted
 - Decision: `cli.Env` has typed fields (`Keychain humanauth.Store`, `HumanAuth *HumanAuthDeps`, `TaskFetcher write.TaskFetcher`, `Selftest *selftest.Service`, `PolicyErrors usecase.PolicyErrorAdapter`) instead of `Keychain any` and an `Extra` map; `cli` no longer imports `internal/sn` outside tests. If `PolicyErrors` is nil a denial is still refused but exits 1. `Guard.AllowedFields(verb, resource)` returns the allowlist of the first matching allow rule (a matching deny returns none); reads without `--fields` request exactly that allowlist. `app/human.go` keeps its own `SNOW_INSECURE_STORE` and home lookup behind a `storeFactory` seam.
+
+## ADR-017 Agent-mode daemon client is the core's oktad adapter
+
+- Status: Accepted (supersedes ADR-002; the core bump also supersedes the `v0.1.0` pin in ADR-001)
+- Context: `agent-cli-core v0.2.1` ships `auth/oktad`, an `auth.DaemonClient` over the `agent-okta-d` Go client.
+- Decision: `go.mod` requires `agent-cli-core v0.2.1` (and, through it, `agent-okta-d v0.1.0`, which tests also import for the `clienttest` fake daemon). `newDaemonClient()` returns `oktad.New` with a 5 s request timeout. A profile `daemon.socket`, when set, is passed as the socket; when unset `snow` no longer fills in a default and the adapter uses `AGENT_OKTA_D_SOCKET`, then the platform default. The provider (`daemon.provider`, default `snow`) and the `auth.DaemonTokenSource` with its re-enrollment remediation text are unchanged. Exit codes follow the adapter: unreachable, reauth_required, revoked and access errors exit 3; degraded or retry-hinted answers exit 8. The `auth.DaemonTokenSource` result is used directly: core v0.2.1 passes categorized errors (`TransientError`, `AccessError`) through, so exit 8 and the adapter hints survive (CR-13, resolved). A cancelled caller context stays a general error (exit 1). The `internal/agentauth` stub is deleted.
+- Consequences: agent mode can obtain a token from a running daemon; it is verified against the fake daemon only. Other v0.2 features are not adopted (see `docs/deferred.md`).

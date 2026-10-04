@@ -20,7 +20,6 @@ import (
 	"github.com/stainedhead/agent-cli-core/auth/authtest"
 	"github.com/stainedhead/agent-cli-core/httpx"
 	"github.com/stainedhead/snow-cli/internal/cli"
-	"github.com/stainedhead/snow-cli/internal/config"
 	"github.com/stainedhead/snow-cli/internal/humanauth"
 	"github.com/stainedhead/snow-cli/internal/testsupport/oktafake"
 	"github.com/stainedhead/snow-cli/internal/testsupport/snfake"
@@ -562,16 +561,7 @@ func TestIntegrationM4ChangeReadsExistAndChangeCreateDoesNot(t *testing.T) {
 
 // ---- Mode wiring (verification step 5) ----
 
-func TestIntegrationAgentModeUsesDaemonStubAndHumanModeUsesCredentialStore(t *testing.T) {
-	a := newItg(t, "agent")
-	a.opts.DaemonClient = nil // production wiring: newDaemonClient stub
-	code, m := a.run("whoami", "--profile", "p")
-	if code != 3 || !strings.Contains(errMsg(m), config.DefaultDaemonSocket) {
-		t.Fatalf("agent whoami: exit %d: %s", code, a.out.String())
-	}
-	if len(a.f.Requests()) != 0 {
-		t.Error("no request without a token")
-	}
+func TestIntegrationHumanModeUsesCredentialStore(t *testing.T) {
 	h := newItg(t, "human")
 	// Default store is a fail-closed stub on this OS: exit 3 naming the escape hatch or login.
 	if code, _ := h.run("whoami"); code != 3 {

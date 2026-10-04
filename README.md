@@ -2,7 +2,7 @@
 
 `snow` is a Go CLI for ServiceNow, built for autonomous SDLC agents and human teammates. It reads tables, looks up CMDB configuration items (CIs), reads work items (incidents, requests, requested items, catalog tasks, changes, problems), creates and updates incidents and catalog tasks, and orders catalog items.
 
-**Status: implemented and tested against fakes; not yet run against a real ServiceNow instance or Okta tenant.** Agent mode is not usable end to end until the `agent-okta-d` client adapter exists (it fails closed with exit 3). Human mode works but needs `--insecure-store` until real OS keychain backends are built. See [docs/deferred.md](docs/deferred.md) and [docs/assumptions.md](docs/assumptions.md).
+**Status: implemented and tested against fakes; not yet run against a real ServiceNow instance or Okta tenant.** Agent mode takes its token from the `agent-okta-d` daemon through the core adapter (exit 3 when the daemon is unreachable or needs re-enrollment); it has been exercised only against the daemon's fake. Human mode works but needs `--insecure-store` until real OS keychain backends are built. See [docs/deferred.md](docs/deferred.md) and [docs/assumptions.md](docs/assumptions.md).
 
 For the purpose, wider context (Okta-secured agent access) and scope boundary, see [INTENT.md](INTENT.md).
 
@@ -35,7 +35,7 @@ The PRD uses an evidence legend: items marked confirmed were checked against ven
 
 ## Shared core: agent-cli-core (build dependency)
 
-`snow` is built on [agent-cli-core](https://github.com/stainedhead/agent-cli-core), a separate Go library repository (auth, policy, output, audit, httpx, selftest, docgen) that also serves `outlook` and `teams`. It originated in PRD section 5, and its own PRD now owns the specification. `snow` requires the released tag `agent-cli-core v0.1.0` (no `replace`, no pseudo-version). Gaps found in the core are listed in [docs/core-change-requests.md](docs/core-change-requests.md); what is not built is in [docs/deferred.md](docs/deferred.md).
+`snow` is built on [agent-cli-core](https://github.com/stainedhead/agent-cli-core), a separate Go library repository (auth, policy, output, audit, httpx, selftest, docgen) that also serves `outlook` and `teams`. It originated in PRD section 5, and its own PRD now owns the specification. `snow` requires the released tag `agent-cli-core v0.2.1` (no `replace`, no pseudo-version). Gaps found in the core are listed in [docs/core-change-requests.md](docs/core-change-requests.md); what is not built is in [docs/deferred.md](docs/deferred.md).
 
 ## Related repositories
 
@@ -57,7 +57,6 @@ internal/usecase/  read, write, selftest and whoami services (no I/O)
 internal/domain/   records, modes, impact/urgency scale
 internal/sn/       ServiceNow client: Table, Aggregate, Service Catalog, CMDB relationships
 internal/humanauth/ Okta PKCE and device flows, credential stores
-internal/agentauth/ fail-closed daemon client stub
 policies/          embedded agent and human policy files
 docs/              product and technical docs, ADRs, assumptions, deferred items
 specs/             feature specs (archive/ for completed)

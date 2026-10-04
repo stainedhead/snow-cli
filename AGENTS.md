@@ -6,7 +6,7 @@ Rules for AI agents and human contributors working in this repository.
 
 `snow` is a Go CLI for ServiceNow work needed by autonomous SDLC agents and human teammates: read tables, look up CMDB configuration items, and read, create and update work items (incidents, requests, catalog tasks). It exposes narrow task-shaped verbs (no raw REST passthrough) and two authentication modes on one command surface: agent mode (short-lived Okta token from the `agent-okta-d` daemon) and human mode (Okta OAuth 2.0 authorization code + PKCE). ServiceNow roles and ACLs are the security boundary; the CLI policy engine is a guardrail and usability layer, never the control.
 
-Status: implemented and tested against fakes only (not yet run against a real ServiceNow instance or Okta tenant); agent mode is a fail-closed stub until the `agent-okta-d` adapter exists. The PRD is [snow-cli-PRD.md](specs/archive/261003-snow-cli/snow-cli-PRD.md) with the spec alongside it. Evidence markers in the PRD (confirmed vs not confirmed) must be preserved when summarizing it.
+Status: implemented and tested against fakes only (not yet run against a real ServiceNow instance or Okta tenant); agent mode uses the core `oktad` adapter and is tested only against the daemon's fake (`clienttest`). The PRD is [snow-cli-PRD.md](specs/archive/261003-snow-cli/snow-cli-PRD.md) with the spec alongside it. Evidence markers in the PRD (confirmed vs not confirmed) must be preserved when summarizing it.
 
 ## Shared core (agent-cli-core)
 
@@ -14,7 +14,7 @@ Status: implemented and tested against fakes only (not yet run against a real Se
 
 - Core changes are made in `agent-cli-core`, never copied into this repository.
 - Depend on released tags only: no pseudo-versions, no `replace` directives on `main`.
-- `go.mod` requires `agent-cli-core v0.1.0`; a core bump is an ordinary PR.
+- `go.mod` requires `agent-cli-core v0.2.1`; a core bump is an ordinary PR.
 - If the core PRD and PRD section 5 differ, the core PRD wins.
 
 ## Layout

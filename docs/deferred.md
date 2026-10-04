@@ -4,7 +4,8 @@ Everything here is intentionally absent from this release. Nothing is stubbed to
 
 | Item | State in this release | Why / what is needed |
 |---|---|---|
-| Real `agent-okta-d` daemon adapter | Fail-closed stub: agent-mode commands that need a token exit 3 and the message names the socket path (ADR-002). `agent-okta-d` is not in `go.mod`. | The adapter and the `agent-okta-d` `pkg/client` release do not exist yet. Replace `newDaemonClient()` in the composition root and add the require. |
+| Other agent-cli-core v0.2 features (optional follow-ups) | Not adopted: page token, clock, and the rest of the v0.2 additions. Only the `auth/oktad` adapter is wired (ADR-017). | Adopt one at a time in separate PRs when a need appears. |
+| Agent mode against a real daemon | The adapter is tested against the daemon's fake (`clienttest`) on a real unix socket, not a running `agent-okta-d` and ServiceNow instance. | Needs the sub-production environment used for live selftest. |
 | Redaction hook (PRD 11, regex/field masks before output) | Not built | Field allowlists in policy are the only data-classification control for now. |
 | Signed or detached-signature policy | Not built; the config rejects any `policy.signature` key so nothing pretends to verify | Core CORE-POL-7 is unbuilt. |
 | Release workflows (tarball, OCI image, SBOM, provenance, cosign, Apple signing and notarization) | Not built; only PR CI exists | Release signing depends on PRD 15.8 items 1 to 3. Unsigned builds would be pre-release. |

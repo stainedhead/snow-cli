@@ -21,7 +21,9 @@ Error output is `{"ok":false,"error":{"code","message","hint"}}`; `hint` says wh
 
 | Symptom | Cause and fix |
 |---|---|
-| Exit 3, "credential daemon unreachable at socket ..." | Agent mode. The `agent-okta-d` adapter is not built into this release, so agent mode cannot obtain a token. Nothing to fix locally. |
+| Exit 3, "credential daemon unreachable at socket ..." | Agent mode. The daemon is not running or the socket path is wrong. Start `agent-okta-d`, or set `daemon.socket` or `AGENT_OKTA_D_SOCKET` to its socket. |
+| Exit 3, "a human action is needed" (reauth required or revoked) | Agent mode. The daemon cannot refresh the credential. Ask the `agent-okta-d` operator to re-enroll it; do not retry. |
+| Exit 8, "credential daemon cannot serve right now" | Agent mode. The daemon is degraded; wait the time in the hint and retry. |
 | Exit 3, "credential store ... is unavailable" | Human mode with no keychain backend. Use `--insecure-store` or `SNOW_INSECURE_STORE=1` (see [human login](human-login.md#where-credentials-are-stored)). |
 | Exit 3, "not logged in" | Run `snow auth login`. |
 | Exit 3 on every human call after login | ServiceNow may reject the token type; try `okta.token_type: id`. |
@@ -48,7 +50,7 @@ Error output is `{"ok":false,"error":{"code","message","hint"}}`; `hint` says wh
 
 ## Not built in this release
 
-- Agent-mode credentials (the daemon adapter): agent commands that need a token exit 3.
+- Agent mode against a real daemon and ServiceNow instance (tested only with a fake daemon).
 - Real OS keychain backends and a WSL2 credential store (use `--insecure-store`).
 - Fixed loopback port setting for the Okta redirect.
 - `change create`, attachments, CMDB writes, approvals, deletes, user/group/role administration, scripts.

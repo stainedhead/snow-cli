@@ -57,24 +57,6 @@ func (f *fixture) opts() Options {
 	}
 }
 
-func TestDaemonStubFailsClosedWithExit3NamingSocket(t *testing.T) {
-	f := newFixture(t, "agent")
-	b, err := build(f.opts(), cli.GlobalFlags{Config: f.cfgPath})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = b.client.Do(context.Background(), sn.Call{Method: "GET", Path: "/api/now/v1/table/incident"})
-	if output.ExitOf(err) != output.ExitAuth {
-		t.Fatalf("exit = %d, want 3 (%v)", output.ExitOf(err), err)
-	}
-	if !strings.Contains(err.Error(), "/run/test-daemon.sock") {
-		t.Errorf("message must name the configured socket: %v", err)
-	}
-	if len(f.fake.Requests()) != 0 {
-		t.Error("no request may be sent without a token")
-	}
-}
-
 func TestFakeDaemonClientYieldsBearerToken(t *testing.T) {
 	f := newFixture(t, "agent")
 	f.fake.On("GET", "/api/now/v1/table/incident", snfake.Records(0))
