@@ -95,6 +95,11 @@ func defaultAuditPath(home string) string {
 	return filepath.Join(home, ".local", "state", "snow", "audit.jsonl")
 }
 
+// rateStatePath keeps the cross-process rate-limit state next to the audit log.
+func rateStatePath(auditPath string) string {
+	return filepath.Join(filepath.Dir(auditPath), "ratelimit.json")
+}
+
 func build(o Options, g cli.GlobalFlags) (*built, error) {
 	if o.Getenv == nil {
 		o.Getenv = os.Getenv
@@ -158,6 +163,9 @@ func build(o Options, g cli.GlobalFlags) (*built, error) {
 	guard := &auditx.Guard{
 		Engine: policy.NewEngine(pol, nil), Sink: lg, Tool: "snow", AgentID: agentID, RunID: runID, Path: auditPath,
 		OnWarn: func(err error) { _, _ = fmt.Fprintf(o.Stderr, "warning: %v\n", err) },
+		// The engine's counters live in this process only; the limiter makes
+		// per_hour and per_run hold across invocations (FR-R02).
+		Limiter: &auditx.StateLimiter{Path: rateStatePath(auditPath), AgentID: agentID, RunID: runID},
 	}
 	env := &cli.Env{
 		Mode: prof.Mode, Profile: prof, AgentID: agentID, RunID: runID,

@@ -44,6 +44,9 @@ type Guard struct {
 	OnWarn func(error)
 	// Now supplies elapsed-time measurement; nil uses time.Now.
 	Now func() time.Time
+	// Limiter enforces rate limits across processes (FR-R02). The in-memory
+	// engine limits only count within one process. Nil disables it.
+	Limiter RateLimiter
 }
 
 var _ usecase.Guard = (*Guard)(nil)
@@ -125,6 +128,12 @@ func (g *Guard) run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 		d = g.Engine.Check(a.Request)
 	}
 	if !probe {
+		if g.Limiter != nil && d.Allowed {
+			var lerr error
+			if d, lerr = g.Limiter.Admit(g.policyOrNil(), d); lerr != nil {
+				return lerr
+			}
+		}
 		label = decisionLabel(d)
 	}
 	rec := audit.Record{
@@ -166,6 +175,13 @@ func (g *Guard) run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 		g.warn(lerr)
 	}
 	return err
+}
+
+func (g *Guard) policyOrNil() *policy.Policy {
+	if g.Engine == nil {
+		return nil
+	}
+	return g.Engine.Policy()
 }
 
 func (g *Guard) logDenial(rec audit.Record) {

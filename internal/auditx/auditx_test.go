@@ -286,3 +286,63 @@ func TestRunProbeActionErrorIsAuditedAsError(t *testing.T) {
 		t.Errorf("records = %+v", rs)
 	}
 }
+
+type stubLimiter struct {
+	d   policy.Decision
+	err error
+	n   int
+}
+
+func (s *stubLimiter) Admit(_ *policy.Policy, d policy.Decision) (policy.Decision, error) {
+	s.n++
+	if s.err != nil || !s.d.Allowed && s.d.Mode == policy.ModeDeny {
+		return s.d, s.err
+	}
+	return d, nil
+}
+
+func TestLimiterDenialIsAuditedAsDeniedAndSkipsAction(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	g.Limiter = &stubLimiter{d: policy.Decision{Mode: policy.ModeDeny, RuleID: "allow-get", Reason: "hourly rate limit reached across invocations; retry in 5m0s"}}
+	called := false
+	err := g.Run(context.Background(), write(), func(context.Context, policy.Decision) (int, error) { called = true; return 200, nil })
+	if called || output.ExitOf(err) != output.ExitPolicyDenied {
+		t.Fatalf("called=%v err=%v", called, err)
+	}
+	rs := records(t, &buf)
+	if len(rs) != 1 || rs[0].Outcome != OutcomeDenied || rs[0].PolicyDecision != "deny" {
+		t.Errorf("records = %+v", rs)
+	}
+}
+
+func TestLimiterStateErrorRefusesTheRequest(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	g.Limiter = &stubLimiter{err: errors.New("state unavailable")}
+	called := false
+	err := g.Run(context.Background(), write(), func(context.Context, policy.Decision) (int, error) { called = true; return 200, nil })
+	if called || err == nil || output.ExitOf(err) != output.ExitGeneral {
+		t.Fatalf("called=%v err=%v", called, err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("no audit record is expected before the request is admitted: %s", buf.String())
+	}
+}
+
+func TestLimiterNotConsultedForDeniedOrProbe(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	l := &stubLimiter{}
+	g.Limiter = l
+	a := usecase.Action{Kind: usecase.Write, Request: policy.Request{Verb: "resolve", Resource: "incident"}}
+	_ = g.Run(context.Background(), a, ok) // denied by policy
+	_ = g.RunProbe(context.Background(), probe(), ok)
+	if l.n != 0 {
+		t.Errorf("limiter consulted %d times", l.n)
+	}
+	_ = g.Run(context.Background(), get(), ok)
+	if l.n != 1 {
+		t.Errorf("limiter must see allowed requests, n=%d", l.n)
+	}
+}
