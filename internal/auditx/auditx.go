@@ -18,7 +18,10 @@ import (
 )
 
 // Outcome labels. "pending" is an audit.Record.Outcome label: the core Record
-// has no free-form fields.
+// has no free-form fields. A use case may replace ok/error with dry_run or
+// applied_conflict (usecase.SetOutcome); the target record rides in the
+// resource as "<base>:<ref>" (FR-R10; a first-class field is a core change
+// request).
 const (
 	OutcomePending = "pending"
 	OutcomeOK      = "ok"
@@ -138,7 +141,7 @@ func (g *Guard) run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 	}
 	rec := audit.Record{
 		Tool: g.Tool, AgentID: g.AgentID, RunID: g.RunID,
-		Verb: a.Request.Verb, Resource: a.Request.Resource,
+		Verb: a.Request.Verb, Resource: usecase.ResourceRef(a.Request.Resource, a.Ref),
 		PolicyDecision: label,
 	}
 	write := a.Kind == usecase.Write
@@ -156,6 +159,7 @@ func (g *Guard) run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 			return &Error{Path: g.Path, Err: err}
 		}
 	}
+	ctx, sink := usecase.WithOutcomeSink(ctx)
 	start := now()
 	status, err := fn(ctx, d)
 	rec.Duration = now().Sub(start)
@@ -167,6 +171,12 @@ func (g *Guard) run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc
 	rec.Outcome = OutcomeOK
 	if err != nil {
 		rec.Outcome = OutcomeError
+	}
+	switch o := sink.Outcome(); {
+	case o != "": // the use case knows better: dry_run, applied_conflict
+		rec.Outcome = string(o)
+	case d.DryRunOnly() && err == nil:
+		rec.Outcome = string(usecase.OutcomeDryRun)
 	}
 	if lerr := g.Sink.Log(rec); lerr != nil {
 		if write {

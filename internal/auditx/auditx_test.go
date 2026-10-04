@@ -346,3 +346,78 @@ func TestLimiterNotConsultedForDeniedOrProbe(t *testing.T) {
 		t.Errorf("limiter must see allowed requests, n=%d", l.n)
 	}
 }
+
+func TestResourceCarriesRefSuffixWhilePolicyMatchesBase(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	a := write()
+	a.Ref = "INC0010001"
+	if err := g.Run(context.Background(), a, ok); err != nil {
+		t.Fatal(err)
+	}
+	rs := records(t, &buf)
+	if len(rs) != 2 || rs[0].Resource != "table:incident:INC0010001" || rs[1].Resource != "table:incident:INC0010001" {
+		t.Errorf("records = %+v", rs)
+	}
+}
+
+func TestDeniedRecordAlsoCarriesRef(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	a := usecase.Action{Kind: usecase.Write, Request: policy.Request{Verb: "resolve", Resource: "incident"}, Ref: "INC1"}
+	_ = g.Run(context.Background(), a, ok)
+	if rs := records(t, &buf); rs[0].Resource != "incident:INC1" || rs[0].Outcome != OutcomeDenied {
+		t.Errorf("records = %+v", rs)
+	}
+}
+
+func TestOutcomeSetByTheActionOverridesOkAndError(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	err := g.Run(context.Background(), write(), func(ctx context.Context, _ policy.Decision) (int, error) {
+		usecase.SetOutcome(ctx, usecase.OutcomeDryRun)
+		return 0, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs := records(t, &buf)
+	if len(rs) != 2 || rs[0].Outcome != OutcomePending || rs[1].Outcome != "dry_run" || rs[1].HTTPStatus != 0 {
+		t.Errorf("dry-run records = %+v", rs)
+	}
+
+	buf.Reset()
+	conflict := errors.New("applied but conflicting")
+	err = g.Run(context.Background(), write(), func(ctx context.Context, _ policy.Decision) (int, error) {
+		usecase.SetOutcome(ctx, usecase.OutcomeAppliedConflict)
+		return 200, conflict
+	})
+	if !errors.Is(err, conflict) {
+		t.Fatal(err)
+	}
+	if rs := records(t, &buf); rs[1].Outcome != "applied_conflict" || rs[1].HTTPStatus != 200 {
+		t.Errorf("conflict records = %+v", rs)
+	}
+}
+
+func TestDryRunOnlyDecisionDefaultsOutcomeToDryRun(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	a := usecase.Action{Kind: usecase.Write, Request: policy.Request{Verb: "order", Resource: "catalog:item:abc"}, Ref: "abc"}
+	if err := g.Run(context.Background(), a, func(context.Context, policy.Decision) (int, error) { return 0, nil }); err != nil {
+		t.Fatal(err)
+	}
+	rs := records(t, &buf)
+	if rs[1].Outcome != "dry_run" || rs[1].Resource != "catalog:item:abc:abc" {
+		t.Errorf("records = %+v", rs)
+	}
+}
+
+func TestOutcomeWithoutSetStaysOkOrError(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	_ = g.Run(context.Background(), get(), ok)
+	if rs := records(t, &buf); rs[0].Outcome != OutcomeOK {
+		t.Errorf("%+v", rs)
+	}
+}

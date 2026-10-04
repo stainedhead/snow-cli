@@ -664,8 +664,12 @@ func TestIntegrationSelftestProbesAreAudited(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, i.out.String())
 	}
 	verbs := map[string][]string{}
+	refs := map[string]bool{}
 	for _, l := range i.auditLines() {
 		v, _ := l["verb"].(string)
+		if r, _ := l["resource"].(string); strings.HasPrefix(v, "selftest:probe-") {
+			refs[v+" "+r] = true
+		}
 		o, _ := l["outcome"].(string)
 		verbs[v] = append(verbs[v], o)
 		if strings.HasPrefix(v, "selftest:probe-") && l["policy_decision"] != "probe_bypass" {
@@ -676,6 +680,9 @@ func TestIntegrationSelftestProbesAreAudited(t *testing.T) {
 		if got := verbs[v]; len(got) != 2 || got[0] != "pending" || got[1] != "error" {
 			t.Errorf("%s audit outcomes = %v, want pending then error", v, got)
 		}
+	}
+	if !refs["selftest:probe-resolve incident:INC0000001"] || !refs["selftest:probe-update incident:INC0000002"] {
+		t.Errorf("probe resources lack the target ref: %v", refs)
 	}
 	if got := verbs["selftest:probe-list"]; len(got) != 4 { // sys_user and sys_properties: pending + error
 		t.Errorf("server read probes audited %v", got)
