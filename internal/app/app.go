@@ -26,6 +26,7 @@ import (
 	"github.com/stainedhead/snow-cli/internal/config"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/sn"
+	"github.com/stainedhead/snow-cli/internal/usecase/selftest"
 )
 
 // Options carries process-level inputs and test seams.
@@ -52,6 +53,8 @@ type Wiring struct {
 	Env     *cli.Env
 	Client  *sn.Client
 	Profile config.Resolved
+	// Probes audits the selftest server probes (FR-R04).
+	Probes selftest.ProbeGuard
 }
 
 type built struct {
@@ -152,14 +155,15 @@ func build(o Options, g cli.GlobalFlags) (*built, error) {
 	if runID == "" {
 		runID = ids.NewID()
 	}
+	guard := &auditx.Guard{
+		Engine: policy.NewEngine(pol, nil), Sink: lg, Tool: "snow", AgentID: agentID, RunID: runID, Path: auditPath,
+		OnWarn: func(err error) { _, _ = fmt.Fprintf(o.Stderr, "warning: %v\n", err) },
+	}
 	env := &cli.Env{
 		Mode: prof.Mode, Profile: prof, AgentID: agentID, RunID: runID,
 		Identity: sn.NewIdentity(client, prof.Whoami.Path),
 		Clock:    clock{}, IDs: ids,
-		Guard: &auditx.Guard{
-			Engine: policy.NewEngine(pol, nil), Sink: lg, Tool: "snow", AgentID: agentID, RunID: runID, Path: auditPath,
-			OnWarn: func(err error) { _, _ = fmt.Fprintf(o.Stderr, "warning: %v\n", err) },
-		},
+		Guard:  guard,
 		Limits: pol.Limits,
 		In:     o.Stdin, Err: o.Stderr,
 		Extra: map[string]any{},
@@ -167,7 +171,7 @@ func build(o Options, g cli.GlobalFlags) (*built, error) {
 	if prof.Mode == domain.ModeHuman {
 		env.Keychain = newKeychain()
 	}
-	w := &Wiring{Env: env, Client: client, Profile: prof}
+	w := &Wiring{Env: env, Client: client, Profile: prof, Probes: guard}
 	wireRead(w)
 	wireWrite(w)
 	wireSelftest(w)

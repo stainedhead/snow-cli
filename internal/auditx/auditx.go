@@ -87,22 +87,50 @@ func decisionLabel(d policy.Decision) string {
 // hasStatus is implemented by errors that know their HTTP status.
 type hasStatus interface{ HTTPStatus() int }
 
+// DecisionProbeBypass is the policy_decision label of a selftest probe: the
+// client policy is skipped on purpose so the server ACL answers (FR-R04).
+const DecisionProbeBypass = "probe_bypass"
+
+// AuditFailed marks an audit write failure so callers (selftest) can abort
+// without importing this package.
+func (*Error) AuditFailed() {}
+
 // Run implements usecase.Guard.
 func (g *Guard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
+	return g.run(ctx, a, fn, false)
+}
+
+// RunProbe runs a selftest server probe (FR-R04): the client policy is
+// deliberately skipped, but the request is audited like a write in Block
+// mode whatever the action kind: a pending record first, no request if it
+// cannot be written, then the outcome record.
+func (g *Guard) RunProbe(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
+	a.Kind = usecase.Write
+	return g.run(ctx, a, fn, true)
+}
+
+func (g *Guard) run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc, probe bool) error {
 	now := g.Now
 	if now == nil {
 		now = time.Now
 	}
 	var d policy.Decision
-	if g.Engine == nil {
+	label := DecisionProbeBypass
+	switch {
+	case probe:
+		d = policy.Decision{Allowed: true}
+	case g.Engine == nil:
 		d = (*policy.Policy)(nil).Evaluate(a.Request)
-	} else {
+	default:
 		d = g.Engine.Check(a.Request)
+	}
+	if !probe {
+		label = decisionLabel(d)
 	}
 	rec := audit.Record{
 		Tool: g.Tool, AgentID: g.AgentID, RunID: g.RunID,
 		Verb: a.Request.Verb, Resource: a.Request.Resource,
-		PolicyDecision: decisionLabel(d),
+		PolicyDecision: label,
 	}
 	write := a.Kind == usecase.Write
 

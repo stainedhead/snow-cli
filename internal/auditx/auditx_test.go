@@ -236,3 +236,53 @@ func TestNilEngineDenies(t *testing.T) {
 		t.Errorf("exit = %d", output.ExitOf(err))
 	}
 }
+
+func probe() usecase.Action {
+	return usecase.Action{Kind: usecase.Write, Request: policy.Request{Verb: "selftest:probe-resolve", Resource: "incident"}}
+}
+
+func TestRunProbeSkipsPolicyAndAuditsPendingThenOutcome(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil) // allowAll has no rule for the probe verb: Run would deny
+	called := false
+	err := g.RunProbe(context.Background(), probe(), func(context.Context, policy.Decision) (int, error) { called = true; return 200, nil })
+	if err != nil || !called {
+		t.Fatalf("err=%v called=%v", err, called)
+	}
+	rs := records(t, &buf)
+	if len(rs) != 2 || rs[0].Outcome != OutcomePending || rs[1].Outcome != OutcomeOK {
+		t.Fatalf("records = %+v", rs)
+	}
+	if rs[0].Verb != "selftest:probe-resolve" || rs[0].PolicyDecision != DecisionProbeBypass || rs[1].HTTPStatus != 200 {
+		t.Errorf("record = %+v", rs[0])
+	}
+}
+
+func TestRunProbeReadKindIsStillBlockMode(t *testing.T) {
+	g := newGuard(t, &failWriter{after: 0}, nil)
+	called := false
+	a := probe()
+	a.Kind = usecase.Read
+	err := g.RunProbe(context.Background(), a, func(context.Context, policy.Decision) (int, error) { called = true; return 200, nil })
+	if called {
+		t.Fatal("probe request ran although its pending audit record failed")
+	}
+	var af interface{ AuditFailed() }
+	if !errors.As(err, &af) {
+		t.Fatalf("want an audit failure, got %v", err)
+	}
+}
+
+func TestRunProbeActionErrorIsAuditedAsError(t *testing.T) {
+	var buf bytes.Buffer
+	g := newGuard(t, &buf, nil)
+	boom := statusErr{403}
+	err := g.RunProbe(context.Background(), probe(), func(context.Context, policy.Decision) (int, error) { return 0, boom })
+	if !errors.Is(err, boom) {
+		t.Fatal(err)
+	}
+	rs := records(t, &buf)
+	if rs[1].Outcome != OutcomeError || rs[1].HTTPStatus != 403 {
+		t.Errorf("records = %+v", rs)
+	}
+}

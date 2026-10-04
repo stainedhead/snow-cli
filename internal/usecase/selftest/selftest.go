@@ -16,6 +16,7 @@ package selftest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/stainedhead/agent-cli-core/output"
@@ -36,9 +37,30 @@ type Fixture struct {
 	Own, Foreign string
 }
 
+// ProbeGuard audits the server probes (FR-R04). Unlike usecase.Guard it does
+// not apply the client policy (the probe exists to ask the server ACL) but it
+// writes the pending audit record before the request and refuses to send the
+// request when that record cannot be written. The verbs are distinct
+// (selftest:probe-*), so the policy bypass is visible in the audit log.
+type ProbeGuard interface {
+	RunProbe(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error
+}
+
+// auditFailure is implemented by audit write errors (auditx.Error).
+type auditFailure interface{ AuditFailed() }
+
+// Probe verbs.
+const (
+	verbProbeList    = "selftest:probe-list"
+	verbProbeResolve = "selftest:probe-resolve"
+	verbProbeUpdate  = "selftest:probe-update"
+)
+
 // Service runs the matrix.
 type Service struct {
-	Guard     usecase.Guard
+	Guard usecase.Guard
+	// Probes audits the server-ACL and write probes; required for them.
+	Probes    ProbeGuard
 	Tables    usecase.TableReader
 	Catalog   usecase.CatalogReader
 	Identity  usecase.Identity
@@ -146,10 +168,17 @@ func (s Service) Run(ctx context.Context) (core.Result, error) {
 		}
 	}
 	var res core.Result
-	var runErr, authErr error
+	var runErr, authErr, auditErr error
 	probe := func(ctx context.Context, r core.Row) (core.Outcome, error) {
+		if auditErr != nil { // audit failed earlier: send nothing more
+			return "", auditErr
+		}
 		o, err := s.Probe(ctx, r)
-		if err != nil && authErr == nil && output.ExitOf(err) == output.ExitAuth {
+		var af auditFailure
+		switch {
+		case err != nil && errors.As(err, &af):
+			auditErr = err
+		case err != nil && authErr == nil && output.ExitOf(err) == output.ExitAuth:
 			authErr = err
 		}
 		return o, err
@@ -161,6 +190,9 @@ func (s Service) Run(ctx context.Context) (core.Result, error) {
 		})
 	if err != nil {
 		return core.Result{}, err
+	}
+	if auditErr != nil {
+		return core.Result{}, auditErr
 	}
 	if authErr != nil {
 		// No credentials: report that (exit 3) instead of a matrix of
@@ -184,18 +216,24 @@ func (s Service) Probe(ctx context.Context, row core.Row) (core.Outcome, error) 
 func (s Service) probe(ctx context.Context, sp spec) (core.Outcome, error) {
 	switch sp.op {
 	case opServerList:
-		_, err := s.Tables.List(ctx, usecase.ListQuery{Table: sp.table, Limit: 1, Fields: []string{"sys_id"}})
-		return classify(err)
+		return s.serverProbe(ctx, verbProbeList, sp.resource, "", usecase.Read, func(ctx context.Context) error {
+			_, err := s.Tables.List(ctx, usecase.ListQuery{Table: sp.table, Limit: 1, Fields: []string{"sys_id"}})
+			return err
+		})
 	case opResolveServer:
-		_, err := s.Incidents.ResolveIncident(ctx, usecase.IncidentResolve{
-			Ref: s.Fixture.Own, CloseCode: "Solved (Permanently)", CloseNote: "snow selftest probe",
+		return s.serverProbe(ctx, verbProbeResolve, policymap.ResIncident, s.Fixture.Own, usecase.Write, func(ctx context.Context) error {
+			_, err := s.Incidents.ResolveIncident(ctx, usecase.IncidentResolve{
+				Ref: s.Fixture.Own, CloseCode: "Solved (Permanently)", CloseNote: "snow selftest probe",
+			})
+			return err
 		})
-		return classify(err)
 	case opUpdateServer:
-		_, err := s.Incidents.UpdateIncident(ctx, usecase.IncidentUpdate{
-			Ref: s.Fixture.Foreign, Fields: map[string]string{"work_notes": "snow selftest probe"},
+		return s.serverProbe(ctx, verbProbeUpdate, policymap.ResIncident, s.Fixture.Foreign, usecase.Write, func(ctx context.Context) error {
+			_, err := s.Incidents.UpdateIncident(ctx, usecase.IncidentUpdate{
+				Ref: s.Fixture.Foreign, Fields: map[string]string{"work_notes": "snow selftest probe"},
+			})
+			return err
 		})
-		return classify(err)
 	}
 	var out core.Outcome
 	req := policymap.NewRequest(sp.verb, sp.resource)
@@ -218,6 +256,22 @@ func (s Service) probe(ctx context.Context, sp spec) (core.Outcome, error) {
 		return classify(err)
 	}
 	return out, nil
+}
+
+// serverProbe sends one server-ACL probe through the audited, policy-skipping
+// probe guard. Without a probe guard nothing is sent (fail closed).
+func (s Service) serverProbe(ctx context.Context, verb, resource, ref string, kind usecase.ActionKind, do func(context.Context) error) (core.Outcome, error) {
+	if s.Probes == nil {
+		return "", errors.New("selftest probe guard is not wired; refusing to send an unaudited probe")
+	}
+	err := s.Probes.RunProbe(ctx, usecase.Action{Kind: kind, Request: policymap.NewRequest(verb, resource), Ref: ref},
+		func(ctx context.Context, _ policy.Decision) (int, error) {
+			if err := do(ctx); err != nil {
+				return 0, err
+			}
+			return statusOK, nil
+		})
+	return classify(err)
 }
 
 func (s Service) guarded(ctx context.Context, sp spec) error {
