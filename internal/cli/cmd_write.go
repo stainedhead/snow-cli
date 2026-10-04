@@ -13,10 +13,6 @@ import (
 	"github.com/stainedhead/snow-cli/internal/usecase/write"
 )
 
-// ExtraTaskFetcher is the Env.Extra key under which the composition root
-// stores the write.TaskFetcher.
-const ExtraTaskFetcher = "write.task_fetcher"
-
 // kvFlag collects repeatable name=value flags.
 type kvFlag struct{ m map[string]string }
 
@@ -223,7 +219,7 @@ func RegisterWrite(r *Router) {
 				return Result{}, err
 			}
 			e := c.Env
-			fetcher, _ := e.Extra[ExtraTaskFetcher].(write.TaskFetcher)
+			fetcher := e.TaskFetcher
 			if e.Tasks == nil || fetcher == nil || e.Identity == nil {
 				return Result{}, notWired("task writer")
 			}

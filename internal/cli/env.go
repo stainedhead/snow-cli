@@ -11,7 +11,10 @@ import (
 	"github.com/stainedhead/agent-cli-core/policy"
 	"github.com/stainedhead/snow-cli/internal/config"
 	"github.com/stainedhead/snow-cli/internal/domain"
+	"github.com/stainedhead/snow-cli/internal/humanauth"
 	"github.com/stainedhead/snow-cli/internal/usecase"
+	"github.com/stainedhead/snow-cli/internal/usecase/selftest"
+	"github.com/stainedhead/snow-cli/internal/usecase/write"
 )
 
 // BuildInfo is stamped by ldflags in cmd/snow.
@@ -48,12 +51,26 @@ type Env struct {
 	In  io.Reader
 	Err io.Writer
 
-	// Keychain is the placeholder for the human-mode credential store
-	// (WS-D replaces its type through app/human.go; nil until then).
-	Keychain any
-	// Extra lets a stream carry adapter objects built in app/<stream>.go
-	// without changing this struct.
-	Extra map[string]any
+	// Keychain is the human-mode credential store; nil in agent mode.
+	Keychain humanauth.Store
+	// HumanAuth overrides the auth command seams (tests); nil means
+	// production defaults.
+	HumanAuth *HumanAuthDeps
+	// TaskFetcher reads a catalog task with its assignee for `task update`.
+	TaskFetcher write.TaskFetcher
+	// Selftest is the wired selftest service; nil means not wired.
+	Selftest *selftest.Service
+	// PolicyErrors adapts policy denials to exit 6, so cli does not import the
+	// sn adapter; nil leaves a denial unadapted (still refused).
+	PolicyErrors usecase.PolicyErrorAdapter
+}
+
+// adaptPolicy turns a policy denial into the policy_denied error.
+func (e *Env) adaptPolicy(err error) error {
+	if e == nil || e.PolicyErrors == nil {
+		return err
+	}
+	return e.PolicyErrors.AdaptPolicyError(err)
 }
 
 // EnvFactory builds the Env for a command from the parsed global flags.

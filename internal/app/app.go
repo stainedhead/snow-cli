@@ -26,6 +26,7 @@ import (
 	"github.com/stainedhead/snow-cli/internal/config"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/sn"
+	"github.com/stainedhead/snow-cli/internal/usecase"
 	"github.com/stainedhead/snow-cli/internal/usecase/selftest"
 )
 
@@ -174,7 +175,7 @@ func build(o Options, g cli.GlobalFlags) (*built, error) {
 		Guard:  guard,
 		Limits: pol.Limits,
 		In:     o.Stdin, Err: o.Stderr,
-		Extra: map[string]any{},
+		PolicyErrors: usecase.PolicyErrorFunc(sn.AdaptPolicyError),
 	}
 	if prof.Mode == domain.ModeHuman {
 		env.Keychain = newKeychain()

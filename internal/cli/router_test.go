@@ -18,6 +18,7 @@ import (
 	"github.com/stainedhead/snow-cli/internal/cli"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/sn"
+	"github.com/stainedhead/snow-cli/internal/usecase"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -278,6 +279,12 @@ func TestMaxBytesTruncatesAndLimitsClamp(t *testing.T) {
 func TestTraceOnlyInHumanMode(t *testing.T) {
 	h := newHarness(t)
 	h.reg("a b", ok("x"))
+	// Without the policy-error adapter the denial is still refused (never
+	// run), only the exit category is generic.
+	if code := h.run("a", "b", "--trace"); code != 1 {
+		t.Errorf("agent --trace without adapter exit = %d, want 1", code)
+	}
+	h.env.PolicyErrors = usecase.PolicyErrorFunc(sn.AdaptPolicyError)
 	if code := h.run("a", "b", "--trace"); code != 6 {
 		t.Errorf("agent --trace exit = %d, want 6", code)
 	}

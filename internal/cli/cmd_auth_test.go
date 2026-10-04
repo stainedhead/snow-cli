@@ -15,7 +15,9 @@ import (
 	"github.com/stainedhead/snow-cli/internal/cli"
 	"github.com/stainedhead/snow-cli/internal/domain"
 	"github.com/stainedhead/snow-cli/internal/humanauth"
+	"github.com/stainedhead/snow-cli/internal/sn"
 	"github.com/stainedhead/snow-cli/internal/testsupport/oktafake"
+	"github.com/stainedhead/snow-cli/internal/usecase"
 )
 
 const (
@@ -54,7 +56,7 @@ func newAuthFixture(t *testing.T, mode domain.Mode) *authFixture {
 		Sleep:        func(context.Context, time.Duration) error { return nil },
 		InsecurePath: filepath.Join(t.TempDir(), "creds.json"),
 	}
-	h.env = &cli.Env{Mode: mode, Keychain: st, Err: errW, Extra: map[string]any{cli.ExtraHumanAuth: deps}}
+	h.env = &cli.Env{Mode: mode, Keychain: st, Err: errW, HumanAuth: deps, PolicyErrors: usecase.PolicyErrorFunc(sn.AdaptPolicyError)}
 	h.env.Profile.Name = "dev"
 	h.env.Profile.Okta.Issuer = f.Issuer()
 	h.env.Profile.Okta.ClientID = "cid"
@@ -221,7 +223,7 @@ func TestAuthLogoutPartialFailure(t *testing.T) {
 
 func TestAuthDefaultsWithoutExtra(t *testing.T) {
 	a := newAuthFixture(t, domain.ModeHuman)
-	a.h.env.Extra = nil
+	a.h.env.HumanAuth = nil
 	a.h.env.Err = nil
 	a.f.QueueToken(200, `{"access_token":"x","expires_in":60}`)
 	_ = a.st.Save("dev", humanauth.Credentials{Issuer: a.f.Issuer(), ClientID: "cid", Subject: "s", AccessToken: "x", Expiry: time.Now().Add(time.Hour)})

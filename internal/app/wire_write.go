@@ -1,7 +1,6 @@
 package app
 
 import (
-	"github.com/stainedhead/snow-cli/internal/cli"
 	"github.com/stainedhead/snow-cli/internal/sn"
 )
 
@@ -16,8 +15,5 @@ func wireWrite(w *Wiring) {
 	tasks := sn.NewTaskAdapter(w.Client)
 	w.Env.Tasks = tasks
 	w.Env.Orders = sn.NewOrderAdapter(w.Client)
-	if w.Env.Extra == nil {
-		w.Env.Extra = map[string]any{}
-	}
-	w.Env.Extra[cli.ExtraTaskFetcher] = tasks
+	w.Env.TaskFetcher = tasks
 }

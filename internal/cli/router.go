@@ -14,7 +14,6 @@ import (
 	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/agent-cli-core/policy"
 	"github.com/stainedhead/snow-cli/internal/domain"
-	"github.com/stainedhead/snow-cli/internal/sn"
 )
 
 // Command is one leaf command, addressed by its Path ("incident", "get").
@@ -174,7 +173,7 @@ func (r *Router) Execute(ctx context.Context, args []string) int {
 		call.Env = env
 		limits = env.Limits
 		if g.Trace && env.Mode != domain.ModeHuman {
-			return r.fail(sn.AdaptPolicyError(&policy.DeniedError{Decision: policy.Decision{
+			return r.fail(env.adaptPolicy(&policy.DeniedError{Decision: policy.Decision{
 				RuleID: "cli-trace-human-only", Reason: "--trace is only available in human mode",
 			}}), g)
 		}
