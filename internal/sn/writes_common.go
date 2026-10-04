@@ -128,6 +128,14 @@ func wModCount(r domain.Record) (int, bool) {
 	return n, err == nil
 }
 
+// wRecordName names a record in messages: its number, else its sys_id.
+func wRecordName(r domain.Record, fallback string) string {
+	if n := r.Get("number"); n != "" {
+		return n
+	}
+	return fallback
+}
+
 // wGuardedPatch implements D-j: read sys_mod_count, PATCH, re-read; a jump of
 // more than one means a concurrent writer (exit 7). expected > 0 additionally
 // refuses to write when the current count differs from what the caller read.
@@ -143,10 +151,11 @@ func (c *Client) wGuardedPatch(ctx context.Context, table, ref string, fields ma
 	if !ok {
 		return domain.WriteResult{}, fmt.Errorf("unexpected ServiceNow response for %s: no sys_id", table)
 	}
+	name := wRecordName(before, string(id))
 	modBefore, haveBefore := wModCount(before)
 	if expected > 0 && haveBefore && modBefore != expected {
 		return domain.WriteResult{}, &ConflictError{Status: http.StatusConflict,
-			Message: fmt.Sprintf("sys_mod_count is %d but %d was expected: the record changed", modBefore, expected)}
+			Message: fmt.Sprintf("%s: sys_mod_count is %d but %d was expected: the record changed and the update was not applied", name, modBefore, expected)}
 	}
 	resp, err := c.Do(ctx, Call{
 		Method: http.MethodPatch, Path: TablePath(table, string(id)), Body: fields,
@@ -166,8 +175,8 @@ func (c *Client) wGuardedPatch(ctx context.Context, table, ref string, fields ma
 		return domain.WriteResult{Record: rec}, nil
 	}
 	if modAfter, haveAfter := wModCount(after); haveBefore && haveAfter && modAfter > modBefore+1 {
-		return domain.WriteResult{}, &ConflictError{Status: http.StatusConflict,
-			Message: fmt.Sprintf("sys_mod_count advanced from %d to %d: another writer changed the record during the update; re-read it", modBefore, modAfter)}
+		return domain.WriteResult{}, &ConflictError{Status: http.StatusConflict, AppliedChange: true,
+			Message: fmt.Sprintf("the change to %s was applied, but sys_mod_count advanced from %d to %d: another writer also changed the record during the update; re-read it before doing anything else", name, modBefore, modAfter)}
 	}
 	for k, v := range after.Fields {
 		rec.Fields[k] = v

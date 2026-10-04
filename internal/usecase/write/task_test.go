@@ -12,13 +12,14 @@ import (
 
 type fakeTasks struct {
 	assigned  string
+	modCount  string
 	fetchErr  error
 	updates   []usecase.TaskUpdate
 	updateErr error
 }
 
 func (f *fakeTasks) FetchTask(context.Context, string) (domain.Record, error) {
-	return domain.Record{Table: "sc_task", Fields: map[string]string{"number": "SCTASK1", AssignedToUserName: f.assigned}}, f.fetchErr
+	return domain.Record{Table: "sc_task", Fields: map[string]string{"number": "SCTASK1", AssignedToUserName: f.assigned, "sys_mod_count": f.modCount}}, f.fetchErr
 }
 func (f *fakeTasks) UpdateTask(_ context.Context, in usecase.TaskUpdate) (domain.WriteResult, error) {
 	f.updates = append(f.updates, in)
@@ -140,5 +141,37 @@ func TestTaskErrorsAndModes(t *testing.T) {
 	ft.updateErr = errBoom
 	if _, err := taskSvc(mustPolicy(t, allowAll), ft).Update(ctx, "SCTASK1", f); err != errBoom {
 		t.Fatalf("update error: %v", err)
+	}
+}
+
+// FR-R08: the task update uses the sys_mod_count it fetched for its own
+// assignment check as the precondition, unless the caller supplied one.
+func TestTaskUpdateUsesFetchedOrSuppliedModCount(t *testing.T) {
+	ft := &fakeTasks{assigned: "svc.agent", modCount: "12"}
+	s := taskSvc(mustPolicy(t, allowAll), ft)
+	if _, err := s.Update(context.Background(), "SCTASK1", map[string]string{"work_notes": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	s.ExpectedModCount = 9
+	if _, err := s.Update(context.Background(), "SCTASK1", map[string]string{"work_notes": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	ft.modCount = ""
+	s.ExpectedModCount = 0
+	if _, err := s.Update(context.Background(), "SCTASK1", map[string]string{"work_notes": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if ft.updates[0].ExpectedModCount != 12 || ft.updates[1].ExpectedModCount != 9 || ft.updates[2].ExpectedModCount != 0 {
+		t.Fatalf("%+v", ft.updates)
+	}
+}
+
+func TestTaskAppliedConflictSetsAuditOutcome(t *testing.T) {
+	ft := &fakeTasks{assigned: "svc.agent", updateErr: appliedErr{}}
+	g := mustPolicy(t, allowAll)
+	_, err := taskSvc(g, ft).Update(context.Background(), "SCTASK1", map[string]string{"work_notes": "x"})
+	wantCategory(t, err, output.CategoryConflict)
+	if g.outcomes[0] != usecase.OutcomeAppliedConflict {
+		t.Fatalf("outcome %q", g.outcomes[0])
 	}
 }

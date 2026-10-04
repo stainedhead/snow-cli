@@ -382,3 +382,37 @@ func TestWriteErrorsMapped(t *testing.T) {
 		t.Fatal("unparseable success body must fail")
 	}
 }
+
+// FR-R08: a post-write advance means the PATCH was applied; the error says so,
+// names the record and must not suggest a plain retry.
+func TestPostWriteConflictStatesChangeWasApplied(t *testing.T) {
+	f := snfake.New(t)
+	modRoute(f, "4", "7")
+	_, err := tableAdapter(t, f).UpdateIncident(context.Background(), usecase.IncidentUpdate{Ref: incID, Fields: map[string]string{"state": "2"}})
+	var ce *sn.ConflictError
+	if !errors.As(err, &ce) || output.ExitOf(err) != output.ExitConflict {
+		t.Fatalf("want conflict: %v", err)
+	}
+	if !ce.Applied() || !strings.Contains(err.Error(), "was applied") || !strings.Contains(err.Error(), "INC1") {
+		t.Fatalf("message must say the change was applied and name the record: %v", err)
+	}
+	if h := ce.Hint(); !strings.Contains(h, "already applied") || strings.Contains(h, "retry deliberately") {
+		t.Fatalf("hint %q", h)
+	}
+	if f.Count("PATCH", incPath+"/"+incID) != 1 {
+		t.Fatal("exactly one PATCH")
+	}
+}
+
+func TestPreWriteConflictIsNotApplied(t *testing.T) {
+	f := snfake.New(t)
+	modRoute(f, "4", "5")
+	_, err := tableAdapter(t, f).UpdateIncident(context.Background(), usecase.IncidentUpdate{Ref: incID, Fields: map[string]string{"state": "2"}, ExpectedModCount: 3})
+	var ce *sn.ConflictError
+	if !errors.As(err, &ce) || ce.Applied() || !strings.Contains(err.Error(), "INC1") || !strings.Contains(err.Error(), "not applied") {
+		t.Fatalf("want a not-applied conflict naming the record: %v", err)
+	}
+	if f.Count("PATCH", incPath+"/"+incID) != 0 {
+		t.Fatal("no PATCH on a pre-write mismatch")
+	}
+}

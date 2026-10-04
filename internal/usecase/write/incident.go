@@ -18,6 +18,10 @@ const incidentTable = "incident"
 type IncidentService struct {
 	Base
 	Writer usecase.IncidentWriter
+	// ExpectedModCount is a sys_mod_count the caller read earlier. When set,
+	// update and resolve refuse to write (exit 7, nothing sent) if the record
+	// moved; 0 leaves only the post-write advance check (FR-R08).
+	ExpectedModCount int
 	// Scale is the instance impact/urgency scale; zero means the OOB scale.
 	Scale domain.Scale
 }
@@ -178,8 +182,9 @@ func (b Base) withProvenance(fields map[string]string) map[string]string {
 	return out
 }
 
-// Update implements FR-041. ExpectedModCount 0 asks the adapter to read
-// sys_mod_count itself and guard the write (D-j).
+// Update implements FR-041. The adapter reads sys_mod_count before the PATCH
+// and re-reads it after (D-j); a caller-supplied ExpectedModCount makes the
+// pre-write check a hard precondition (FR-R08).
 func (s IncidentService) Update(ctx context.Context, ref string, fields map[string]string) (domain.WriteResult, error) {
 	id, err := parseIncidentRef(ref)
 	if err != nil {
@@ -199,8 +204,9 @@ func (s IncidentService) Update(ctx context.Context, ref string, fields map[stri
 		if err := s.confirm("Update incident " + id + " (" + strings.Join(sortedKeys(fields), ", ") + ")?"); err != nil {
 			return 0, err
 		}
-		res, err := s.Writer.UpdateIncident(ctx, usecase.IncidentUpdate{Ref: id, Fields: send})
+		res, err := s.Writer.UpdateIncident(ctx, usecase.IncidentUpdate{Ref: id, Fields: send, ExpectedModCount: s.ExpectedModCount})
 		if err != nil {
+			noteOutcome(ctx, err)
 			return 0, err
 		}
 		out = res
@@ -245,8 +251,9 @@ func (s IncidentService) Resolve(ctx context.Context, ref, closeCode, closeNotes
 		if err := s.confirm("Resolve incident " + id + " with close code \"" + closeCode + "\"?"); err != nil {
 			return 0, err
 		}
-		res, err := s.Writer.ResolveIncident(ctx, usecase.IncidentResolve{Ref: id, CloseCode: closeCode, CloseNote: notes})
+		res, err := s.Writer.ResolveIncident(ctx, usecase.IncidentResolve{Ref: id, CloseCode: closeCode, CloseNote: notes, ExpectedModCount: s.ExpectedModCount})
 		if err != nil {
+			noteOutcome(ctx, err)
 			return 0, err
 		}
 		out = res

@@ -373,3 +373,52 @@ func TestResolveValidationDeniedDryRunConfirm(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// FR-R08: a caller-supplied sys_mod_count reaches the adapter.
+func TestUpdateAndResolvePassExpectedModCount(t *testing.T) {
+	w := &fakeIncidents{}
+	s := svc(mustPolicy(t, allowAll), w)
+	s.ExpectedModCount = 7
+	if _, err := s.Update(context.Background(), "INC0010001", map[string]string{"state": "2"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Resolve(context.Background(), "INC0010001", "Solved", "fixed"); err != nil {
+		t.Fatal(err)
+	}
+	if w.updates[0].ExpectedModCount != 7 || w.resolves[0].ExpectedModCount != 7 {
+		t.Fatalf("%+v %+v", w.updates, w.resolves)
+	}
+	s.ExpectedModCount = 0
+	_, _ = s.Update(context.Background(), "INC0010001", map[string]string{"state": "2"})
+	if w.updates[1].ExpectedModCount != 0 {
+		t.Fatal("unset stays 0 (the adapter reads before PATCH)")
+	}
+}
+
+type appliedErr struct{}
+
+func (appliedErr) Error() string             { return "applied but conflicting" }
+func (appliedErr) Applied() bool             { return true }
+func (appliedErr) Category() output.Category { return output.CategoryConflict }
+
+func TestAppliedConflictSetsAuditOutcome(t *testing.T) {
+	w := &fakeIncidents{updateErr: appliedErr{}}
+	g := mustPolicy(t, allowAll)
+	s := svc(g, w)
+	_, err := s.Update(context.Background(), "INC0010001", map[string]string{"state": "2"})
+	wantCategory(t, err, output.CategoryConflict)
+	_, err = s.Resolve(context.Background(), "INC0010001", "Solved", "fixed")
+	wantCategory(t, err, output.CategoryConflict)
+	for i, o := range g.outcomes {
+		if o != usecase.OutcomeAppliedConflict {
+			t.Errorf("action %d outcome %q", i, o)
+		}
+	}
+	// A plain error leaves the default outcome.
+	w.updateErr = errBoom
+	g.outcomes = nil
+	_, _ = s.Update(context.Background(), "INC0010001", map[string]string{"state": "2"})
+	if g.outcomes[0] != "" {
+		t.Fatalf("outcome %q", g.outcomes[0])
+	}
+}

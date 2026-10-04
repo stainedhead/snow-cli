@@ -24,17 +24,28 @@ func (*NotFoundError) Hint() string {
 // HTTPStatus returns the upstream status.
 func (e *NotFoundError) HTTPStatus() int { return e.Status }
 
-// ConflictError is a 409 or 412.
+// ConflictError is a 409 or 412, or a sys_mod_count conflict found by the
+// write guard.
 type ConflictError struct {
 	Status  int
 	Message string
+	// AppliedChange is set when the write was sent and applied before the
+	// conflict was noticed (FR-R08): the caller must not simply retry it.
+	AppliedChange bool
 }
+
+// Applied reports that the write was applied despite the conflict; the use
+// case records the applied_conflict audit outcome from it.
+func (e *ConflictError) Applied() bool { return e.AppliedChange }
 
 func (e *ConflictError) Error() string {
 	return fmt.Sprintf("conflict (HTTP %d): %s", e.Status, e.Message)
 }
 func (*ConflictError) Category() output.Category { return output.CategoryConflict }
-func (*ConflictError) Hint() string {
+func (e *ConflictError) Hint() string {
+	if e.AppliedChange {
+		return "The change was already applied; do not repeat it (a retry would duplicate work notes). Re-read the record and reconcile with the other writer."
+	}
 	return "The record changed or conflicts with the request. Re-read it and retry deliberately."
 }
 

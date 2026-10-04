@@ -2,6 +2,7 @@ package write
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/stainedhead/agent-cli-core/policy"
@@ -38,6 +39,9 @@ type TaskService struct {
 	Writer   usecase.TaskWriter
 	Fetcher  TaskFetcher
 	Identity usecase.Identity
+	// ExpectedModCount is a sys_mod_count the caller read earlier; 0 uses the
+	// count fetched for the assignment check (FR-R08).
+	ExpectedModCount int
 }
 
 func parseTaskRef(ref string) (string, error) {
@@ -106,8 +110,13 @@ func (s TaskService) Update(ctx context.Context, ref string, fields map[string]s
 		if err := s.confirm("Update task " + id + " (" + strings.Join(sortedKeys(fields), ", ") + ")?"); err != nil {
 			return 0, err
 		}
-		res, err := s.Writer.UpdateTask(ctx, usecase.TaskUpdate{Ref: id, Fields: send})
+		expected := s.ExpectedModCount
+		if n, err := strconv.Atoi(task.Get("sys_mod_count")); expected == 0 && err == nil && n > 0 {
+			expected = n
+		}
+		res, err := s.Writer.UpdateTask(ctx, usecase.TaskUpdate{Ref: id, Fields: send, ExpectedModCount: expected})
 		if err != nil {
+			noteOutcome(ctx, err)
 			return 0, err
 		}
 		out = res
