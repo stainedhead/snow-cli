@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -95,7 +96,8 @@ func LoginPKCE(ctx context.Context, cfg Config, opt PKCEOptions) (Credentials, e
 	if err != nil {
 		return Credentials{}, fmt.Errorf("cannot start the loopback listener: %w", err)
 	}
-	redirect := "http://" + ln.Addr().String() + "/callback"
+	listenAddr := ln.Addr().String()
+	redirect := "http://" + listenAddr + "/callback"
 	ch := make(chan callback, 1)
 	send := func(cb callback) {
 		select {
@@ -107,9 +109,13 @@ func LoginPKCE(ctx context.Context, cfg Config, opt PKCEOptions) (Credentials, e
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		switch {
-		case q.Get("state") != state:
+		case r.Host != listenAddr:
+			// DNS rebinding guard: only the literal loopback address is served.
+			http.Error(w, "unexpected host", http.StatusBadRequest)
+		case subtle.ConstantTimeCompare([]byte(q.Get("state")), []byte(state)) != 1:
+			// A forged or stray request must not abort the genuine login
+			// (local denial of service): answer 400 and keep waiting.
 			http.Error(w, "state mismatch", http.StatusBadRequest)
-			send(callback{err: errors.New("login aborted: the callback state did not match (possible forged request)")})
 		case q.Get("error") != "":
 			http.Error(w, "login failed", http.StatusBadRequest)
 			send(callback{err: &OAuthError{Status: http.StatusBadRequest, Code: q.Get("error"), Description: truncate(q.Get("error_description"), 300)}})
@@ -159,8 +165,11 @@ func LoginPKCE(ctx context.Context, cfg Config, opt PKCEOptions) (Credentials, e
 	if err != nil {
 		return Credentials{}, err
 	}
-	if cl := idClaims(tr.IDToken); tr.IDToken != "" && cl.Nonce != "" && cl.Nonce != nonce {
-		return Credentials{}, errors.New("login aborted: the id_token nonce did not match")
+	// When an id_token is returned its nonce must be present and equal.
+	// The id_token signature is not verified (see idClaims), so Subject is an
+	// unverified display value, never an authorization input.
+	if tr.IDToken != "" && idClaims(tr.IDToken).Nonce != nonce {
+		return Credentials{}, errors.New("login aborted: the id_token nonce was missing or did not match")
 	}
 	return cfg.credentials(tr, Credentials{}), nil
 }

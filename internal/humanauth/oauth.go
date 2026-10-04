@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/stainedhead/agent-cli-core/httpx"
 )
 
 // DefaultScopes are requested at login (FR-011).
@@ -34,11 +36,43 @@ func (c Config) now() time.Time {
 	return time.Now()
 }
 
+// client returns the Okta HTTP client. Whatever transport is injected, the
+// client refuses any redirect to a host other than the issuer host and any
+// https to http downgrade (FR-R01): Go would otherwise re-send a 307/308 form
+// body (refresh_token, code, code_verifier) to the redirect target. Refusals
+// are *httpx.ForbiddenHostError (exit 4) and nothing is sent to the target.
 func (c Config) client() *http.Client {
+	var hc http.Client
 	if c.HTTP != nil {
-		return c.HTTP
+		hc = *c.HTTP
+	} else {
+		hc = http.Client{Timeout: 30 * time.Second}
 	}
-	return &http.Client{Timeout: 30 * time.Second}
+	hc.CheckRedirect = c.checkRedirect
+	return &hc
+}
+
+func (c Config) checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	return c.checkTarget(req.URL)
+}
+
+// checkTarget allows only the issuer host (host:port), over https, or over
+// http when the issuer itself is plain-http loopback (Validate rules).
+func (c Config) checkTarget(u *url.URL) error {
+	iss, err := url.Parse(c.Issuer)
+	if err != nil {
+		return &httpx.ForbiddenHostError{Host: u.Host}
+	}
+	if !strings.EqualFold(u.Host, iss.Host) {
+		return &httpx.ForbiddenHostError{Host: u.Host}
+	}
+	if u.Scheme != iss.Scheme {
+		return &httpx.ForbiddenHostError{Host: u.Host, Insecure: u.Scheme == "http"}
+	}
+	return nil
 }
 
 func (c Config) scope() string {

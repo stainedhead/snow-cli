@@ -20,7 +20,7 @@ func TestPKCESuccess(t *testing.T) {
 	b := &browser{t: t}
 	var out bytes.Buffer
 	// The id_token nonce must echo the one sent; patch after launch.
-	f.QueueToken(200, tokenBody(secretAccess, secretRefresh, map[string]any{"sub": "00u1"}, 3600))
+	b.queueEchoToken(f, secretAccess, secretRefresh, map[string]any{"sub": "00u1"})
 	cr, err := humanauth.LoginPKCE(context.Background(), cfgFor(f), humanauth.PKCEOptions{Launch: b.launch, Out: &out})
 	must(t, err)
 	if cr.Subject != "00u1" || cr.AccessToken != secretAccess || cr.RefreshToken != secretRefresh {
@@ -52,7 +52,6 @@ func TestPKCEFailures(t *testing.T) {
 		override map[string][]string
 		want     string
 	}{
-		{"state mismatch", map[string][]string{"state": {"forged"}}, "state did not match"},
 		{"okta error", map[string][]string{"error": {"access_denied"}, "error_description": {"nope"}}, "access_denied"},
 		{"missing code", map[string][]string{"code": {""}}, "no authorization code"},
 	}

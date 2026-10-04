@@ -317,8 +317,9 @@ func TestNoTokenInAnyOutput(t *testing.T) {
 	// or returned as text contains a token value.
 	f := oktafake.New(t)
 	var prompts strings.Builder
-	f.QueueToken(200, tokenBody(secretAccess, secretRefresh, map[string]any{"sub": "u"}, 3600))
-	cr, err := humanauth.LoginPKCE(context.Background(), cfgFor(f), humanauth.PKCEOptions{Launch: (&browser{t: t}).launch, Out: &prompts})
+	br := &browser{t: t}
+	br.queueEchoToken(f, secretAccess, secretRefresh, map[string]any{"sub": "u"})
+	cr, err := humanauth.LoginPKCE(context.Background(), cfgFor(f), humanauth.PKCEOptions{Launch: br.launch, Out: &prompts})
 	must(t, err)
 	st := humanauth.NewMemoryStore()
 	must(t, st.Save("dev", cr))

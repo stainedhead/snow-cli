@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stainedhead/agent-cli-core/auth"
+	"github.com/stainedhead/agent-cli-core/httpx"
 )
 
 // refreshSkew refreshes slightly before expiry.
@@ -92,6 +93,10 @@ func (s *Source) refreshLocked(ctx context.Context, c Credentials) (auth.Token, 
 		"client_id": {s.cfg.ClientID}, "scope": {s.cfg.scope()},
 	})
 	if err != nil {
+		var fh *httpx.ForbiddenHostError
+		if errors.As(err, &fh) {
+			return auth.Token{}, err // exit 4: keep the category (FR-R01)
+		}
 		var oe *OAuthError
 		if errors.As(err, &oe) {
 			return auth.Token{}, &LoginRequiredError{Msg: "token refresh was rejected", Err: oe}

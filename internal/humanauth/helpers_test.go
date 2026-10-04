@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,7 +49,26 @@ type browser struct {
 	t        *testing.T
 	override url.Values // replaces callback params
 	gotURL   string
+	mu       sync.Mutex
 	nonce    string
+}
+
+// Nonce returns the nonce of the authorize URL the browser was sent to.
+func (b *browser) Nonce() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.nonce
+}
+
+// queueEchoToken queues a token response whose id_token echoes the nonce.
+func (b *browser) queueEchoToken(f *oktafake.Fake, access, refresh string, claims map[string]any) {
+	f.QueueTokenFunc(func() (int, string) {
+		c := map[string]any{"nonce": b.Nonce()}
+		for k, v := range claims {
+			c[k] = v
+		}
+		return 200, tokenBody(access, refresh, c, 3600)
+	})
 }
 
 func (b *browser) launch(raw string) error {
@@ -58,7 +78,9 @@ func (b *browser) launch(raw string) error {
 		return err
 	}
 	q := u.Query()
+	b.mu.Lock()
 	b.nonce = q.Get("nonce")
+	b.mu.Unlock()
 	cb := q.Get("redirect_uri")
 	params := url.Values{"code": {"auth-code"}, "state": {q.Get("state")}}
 	for k, v := range b.override {
