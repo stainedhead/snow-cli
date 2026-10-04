@@ -1,7 +1,7 @@
 # Dev-Flow Implementation Status
 
 **PRD:** snow-cli-PRD.md
-**Spec:** specs/261003-snow-cli
+**Spec:** specs/archive/261003-snow-cli
 **Branch:** feat/snow-cli
 **Review PRD:** snow-cli-auto-review-PRD.md
 **Process Start:** 2026-10-03T23:20:16Z
