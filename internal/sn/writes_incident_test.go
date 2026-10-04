@@ -41,8 +41,8 @@ func TestFindByCorrelationHitAndMiss(t *testing.T) {
 		t.Fatalf("%v %+v", err, rec)
 	}
 	q := f.Requests()[0].Query
-	if !strings.Contains(q, "active%3Dtrue%5Ecorrelation_id%3Dsnow-abc") && !strings.Contains(q, "active=true^correlation_id=snow-abc") {
-		t.Fatalf("dedupe query %q", q)
+	if strings.Contains(q, "active") || !strings.Contains(q, "correlation_id%3Dsnow-abc") {
+		t.Fatalf("dedupe query %q must match the correlation id without an active filter (FR-R11)", q)
 	}
 	f.On("GET", incPath, snfake.Records(0))
 	rec, err = a.FindByCorrelation(context.Background(), "snow-abc")

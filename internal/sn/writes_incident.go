@@ -68,15 +68,17 @@ func NewIncidentAdapter(c *Client, o IncidentOptions) *IncidentAdapter {
 	return &IncidentAdapter{c: c, opts: o}
 }
 
-// FindByCorrelation returns the active incident carrying correlation_id, or
-// nil when none exists (the dedupe query, D-c).
+// FindByCorrelation returns the newest incident carrying correlation_id, or
+// nil when none exists (the dedupe query, D-c). It does not filter on active:
+// an incident resolved or closed since the first attempt is still the record
+// this key created (FR-R11).
 func (a *IncidentAdapter) FindByCorrelation(ctx context.Context, correlationID string) (*domain.Record, error) {
 	if !wSafeRef(correlationID) {
 		return nil, fmt.Errorf("sn: refusing correlation id %q: only letters, digits and . _ - : are allowed", correlationID)
 	}
 	p := TableParams{
 		Fields: []string{"sys_id", "number", "state", "short_description", "correlation_id", "sys_mod_count"},
-		Limit:  1, Query: wJoin("active=true", "correlation_id="+correlationID), NoOrder: true,
+		Limit:  1, Query: "correlation_id=" + correlationID,
 	}
 	resp, err := a.c.Do(ctx, Call{Method: http.MethodGet, Path: TablePath(incidentTable), Query: p.Values()})
 	if err != nil {

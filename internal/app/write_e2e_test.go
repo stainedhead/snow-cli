@@ -130,7 +130,7 @@ func TestE2ECreate503ReDedupesBeforeEachResend(t *testing.T) {
 	if code, _ := e.run(e2eCreate...); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.out.String())
 	}
-	if e.f.Posts() != 3 || e.f.Count("GET", "/api/now/v1/table/incident") != 3 {
+	if e.f.Posts() != 3 || e.f.Count("GET", "/api/now/v1/table/incident") != 4 { // 2 initial (this + previous hour) + 2 before re-sends
 		t.Fatalf("posts=%d dedupe GETs=%d", e.f.Posts(), e.f.Count("GET", "/api/now/v1/table/incident"))
 	}
 }

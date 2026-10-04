@@ -53,6 +53,9 @@ func (s IncidentService) validateCreate(in CreateInput) error {
 	case blank(in.CI):
 		return invalid("--ci or --app is required")
 	}
+	if err := idempotency.ValidateKey(in.IdempotencyKey); err != nil {
+		return invalid("%v", err)
+	}
 	sc := s.scale()
 	if in.Impact == 0 {
 		return invalid("--impact is required (%d high, %d medium, %d low)", sc.High, sc.Medium, sc.Low)
@@ -76,7 +79,9 @@ func (s IncidentService) Create(ctx context.Context, in CreateInput) (domain.Wri
 	if err := s.validateCreate(in); err != nil {
 		return domain.WriteResult{}, err
 	}
-	key := idempotency.Resolve(in.IdempotencyKey, s.AgentID, in.CI, in.ShortDescription, s.Clock.Now())
+	now := s.Clock.Now()
+	key := idempotency.Resolve(in.IdempotencyKey, s.AgentID, in.CI, in.ShortDescription, now)
+	lookups := idempotency.LookupKeys(in.IdempotencyKey, s.AgentID, in.CI, in.ShortDescription, now)
 	note := provenance.WorkNote(s.AgentID, s.RunID, in.WorkNote)
 	call := usecase.IncidentCreate{
 		ShortDescription: in.ShortDescription, Description: in.Description, CI: in.CI,
@@ -107,7 +112,7 @@ func (s IncidentService) Create(ctx context.Context, in CreateInput) (domain.Wri
 		if err := s.confirm("Create incident \"" + in.ShortDescription + "\" on " + in.CI + "?"); err != nil {
 			return 0, err
 		}
-		hit, err := idempotency.Check(ctx, s.Writer, key)
+		hit, err := idempotency.CheckAny(ctx, s.Writer, lookups)
 		if err != nil {
 			return 0, err
 		}
