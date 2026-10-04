@@ -22,6 +22,7 @@ type Request struct {
 type scripted struct {
 	status int
 	body   string
+	fn     func() (int, string) // when set, evaluated at serve time
 }
 
 // Fake is the fake Okta server. Endpoints (relative to Issuer):
@@ -55,14 +56,23 @@ func (f *Fake) Host() string { return f.srv.Listener.Addr().String() }
 func (f *Fake) QueueToken(status int, body string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.tokens = append(f.tokens, scripted{status, body})
+	f.tokens = append(f.tokens, scripted{status: status, body: body})
+}
+
+// QueueTokenFunc scripts the next /v1/token response, computed when the
+// request arrives (for bodies that depend on state known only mid-login, such
+// as the nonce).
+func (f *Fake) QueueTokenFunc(fn func() (int, string)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tokens = append(f.tokens, scripted{fn: fn})
 }
 
 // QueueDevice scripts the next /v1/device/authorize response.
 func (f *Fake) QueueDevice(status int, body string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.devices = append(f.devices, scripted{status, body})
+	f.devices = append(f.devices, scripted{status: status, body: body})
 }
 
 // SetRevoke sets the status of /v1/revoke.
@@ -108,6 +118,9 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		s = scripted{status: http.StatusNotFound, body: `{"error":"not_found"}`}
 	}
 	f.mu.Unlock()
+	if s.fn != nil {
+		s.status, s.body = s.fn()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(s.status)
 	_, _ = w.Write([]byte(s.body))
