@@ -6,7 +6,7 @@ Rules for AI agents and human contributors working in this repository.
 
 `snow` is a Go CLI for ServiceNow work needed by autonomous SDLC agents and human teammates: read tables, look up CMDB configuration items, and read, create and update work items (incidents, requests, catalog tasks). It exposes narrow task-shaped verbs (no raw REST passthrough) and two authentication modes on one command surface: agent mode (short-lived Okta token from the `agent-okta-d` daemon) and human mode (Okta OAuth 2.0 authorization code + PKCE). ServiceNow roles and ACLs are the security boundary; the CLI policy engine is a guardrail and usability layer, never the control.
 
-Status: implemented and tested against fakes only (not yet run against a real ServiceNow instance or Okta tenant); agent mode is a fail-closed stub until the `agent-okta-d` adapter exists. The PRD is [snow-cli-PRD.md](specs/261003-snow-cli/snow-cli-PRD.md) with the spec alongside it. Evidence markers in the PRD (confirmed vs not confirmed) must be preserved when summarizing it.
+Status: implemented and tested against fakes only (not yet run against a real ServiceNow instance or Okta tenant); agent mode is a fail-closed stub until the `agent-okta-d` adapter exists. The PRD is [snow-cli-PRD.md](specs/archive/261003-snow-cli/snow-cli-PRD.md) with the spec alongside it. Evidence markers in the PRD (confirmed vs not confirmed) must be preserved when summarizing it.
 
 ## Shared core (agent-cli-core)
 
@@ -22,7 +22,7 @@ Status: implemented and tested against fakes only (not yet run against a real Se
 Doc routing: a shift in goal, direction or scope goes in [INTENT.md](INTENT.md) (why and where the tool fits); requirements go in the PRD; contributor rules go here.
 
 - `INTENT.md` - purpose, wider context, goals, non-goals, scope boundary
-- `specs/261003-snow-cli/snow-cli-PRD.md` - product requirements (the how)
+- `specs/archive/261003-snow-cli/snow-cli-PRD.md` - product requirements (the how)
 
 Go layout (see README.md for the full list):
 

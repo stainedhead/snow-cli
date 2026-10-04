@@ -80,7 +80,7 @@ User guides ([user-docs/](user-docs/)):
 Project documents:
 
 - [INTENT.md](INTENT.md) - why this tool exists and where it fits in the set
-- [PRD](specs/261003-snow-cli/snow-cli-PRD.md) and [spec](specs/261003-snow-cli/spec.md) - requirements and feature specification
+- [PRD](specs/archive/261003-snow-cli/snow-cli-PRD.md) and [spec](specs/archive/261003-snow-cli/spec.md) - requirements and feature specification
 - [AGENTS.md](AGENTS.md) - contributor and agent rules
 - [docs/](docs/) - product summary and details, technical details, ADRs, assumptions register, deferred items, M0 spike checklist
 

@@ -1,6 +1,6 @@
 # snow-cli Auto Review PRD
 
-Branch: feat/snow-cli. Reviewed against specs/261003-snow-cli/spec.md and snow-cli-PRD.md. Method: read the implementation (config, sn adapter, humanauth, auditx, use cases, CLI, policies, docs) and ran `go build`, `go vet`, `gofmt -l`, `golangci-lint run` (0 issues) and `go test -race -cover ./...` (all green; usecase packages 95-100%, humanauth 88%, sn 90%, cli 72%, cmd/snow 43%).
+Branch: feat/snow-cli. Reviewed against specs/archive/261003-snow-cli/spec.md and snow-cli-PRD.md. Method: read the implementation (config, sn adapter, humanauth, auditx, use cases, CLI, policies, docs) and ran `go build`, `go vet`, `gofmt -l`, `golangci-lint run` (0 issues) and `go test -race -cover ./...` (all green; usecase packages 95-100%, humanauth 88%, sn 90%, cli 72%, cmd/snow 43%).
 
 ## 1. Executive Summary
 
@@ -77,8 +77,8 @@ Evidence: `cli.Env.Keychain any` and `Env.Extra map[string]any` carry typed serv
 Acceptance: replace `Keychain any` with `humanauth.Store` (or a port interface in usecase), give the task fetcher, selftest service and human deps typed fields on `Env`, make `AllowedFields` part of the `Guard` port, move policy-error adaptation behind a port; raise humanauth and sn to at least 90% with tests for refresh rotation failure, store errors and the new FR-R01/R09 paths.
 
 **FR-R15 (P2) Documentation accuracy and hygiene.**
-Evidence: `user-docs/configuration.md` line about `per_hour` implies working enforcement (see FR-R02); `docs/ws-b-requests.md` .. `ws-e-requests.md` are internal stream hand-off notes left in docs/; README links into `specs/261003-snow-cli/` which will move on archive; docs describe retry-safety of create without the lost-response caveat (FR-R07) and the conflict wording without "already applied" (FR-R08). user-docs themselves contain no links into specs and no design material (rule satisfied).
-Acceptance: (a) every docs/technical-details.md, ADR and user-docs statement touched by FR-R01..R14 matches the final code (checked by a docs review pass listing each changed statement); (b) docs/ws-*-requests.md are folded into the ADR or deleted, none remain; (c) README has no link to the pre-archive `specs/261003-snow-cli/` path (grep returns none; links use specs/archive/); (d) docs/assumptions.md lists every new ASSUMPTION and the assumption test still passes; (e) user-docs contain no links into specs/ and no design material (grep check).
+Evidence: `user-docs/configuration.md` line about `per_hour` implies working enforcement (see FR-R02); `docs/ws-b-requests.md` .. `ws-e-requests.md` are internal stream hand-off notes left in docs/; README links into specs/ pointed at the pre-archive path (now updated to specs/archive/); docs describe retry-safety of create without the lost-response caveat (FR-R07) and the conflict wording without "already applied" (FR-R08). user-docs themselves contain no links into specs and no design material (rule satisfied).
+Acceptance: (a) every docs/technical-details.md, ADR and user-docs statement touched by FR-R01..R14 matches the final code (checked by a docs review pass listing each changed statement); (b) docs/ws-*-requests.md are folded into the ADR or deleted, none remain; (c) README links to the spec resolve (they use specs/archive/261003-snow-cli/); (d) docs/assumptions.md lists every new ASSUMPTION and the assumption test still passes; (e) user-docs contain no links into specs/ and no design material (grep check).
 
 ## 3. Guidance for the fix phase
 

@@ -11,4 +11,4 @@ Not usable end to end: agent mode against a real instance (the daemon adapter is
 
 Built on `github.com/stainedhead/agent-cli-core` v0.1.0 for the output envelope and exit codes, auth interfaces, policy engine, audit log, HTTP transport, selftest runner and skill generator.
 
-Source requirements: [snow-cli-PRD.md](../specs/261003-snow-cli/snow-cli-PRD.md) (Draft v0.1) and [spec.md](../specs/261003-snow-cli/spec.md).
+Source requirements: [snow-cli-PRD.md](../specs/archive/261003-snow-cli/snow-cli-PRD.md) (Draft v0.1) and [spec.md](../specs/archive/261003-snow-cli/spec.md).

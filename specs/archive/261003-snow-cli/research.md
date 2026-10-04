@@ -1,6 +1,6 @@
 # Research: snow-cli (2026-10-03)
 
-Source PRD: `specs/261003-snow-cli/snow-cli-PRD.md`
+Source PRD: `specs/archive/261003-snow-cli/snow-cli-PRD.md`
 
 ## Research Questions
 1. RQ-1: How does core output truncation treat object data containing an `items` array (spec D-e, R-04)? Verify by reading core `output` tests; fall back to snow-side trimming.

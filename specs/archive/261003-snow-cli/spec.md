@@ -1,8 +1,8 @@
 # Feature Specification: snow CLI
 
-- **Spec dir:** specs/261003-snow-cli
+- **Spec dir:** specs/archive/261003-snow-cli
 - **Created:** 2026-10-03 (PRD Draft v0.1)
-- **Source PRD:** `specs/261003-snow-cli/snow-cli-PRD.md`
+- **Source PRD:** `specs/archive/261003-snow-cli/snow-cli-PRD.md`
 - **Status:** Draft for review (dev-flow step 1)
 - **Core dependency:** `github.com/stainedhead/agent-cli-core` v0.1.0 (no `replace`, no pseudo-version). Where the core PRD and PRD section 5 differ, the core wins.
 
@@ -221,5 +221,5 @@ M0 (checklist only) -> WS-A foundation -> parallel WS-B read, WS-C write, WS-D h
 Redaction hook; signed policy; `change create`; CMDB Instance API; attachments; real daemon adapter; real OS keychain backends; release workflows; the scoped app. All listed in `docs/deferred.md`.
 
 ## 16. References
-- Source PRD: `specs/261003-snow-cli/snow-cli-PRD.md`
+- Source PRD: `specs/archive/261003-snow-cli/snow-cli-PRD.md`
 - Core: agent-cli-core v0.1.0 README, `docs/technical-details.md`, `user-docs/`
