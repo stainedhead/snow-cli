@@ -335,7 +335,7 @@ Resolve an incident with a close code and notes (default deny for agents).
 Usage:
 
 ```
-snow incident resolve <INC number|sys_id> --close-code <code> --close-notes <text> [--dry-run] [--yes]
+snow incident resolve <INC number|sys_id> --close-code <code> --close-notes <text> [--expected-mod-count <n>] [--dry-run] [--yes]
 ```
 
 Examples:
@@ -355,7 +355,7 @@ Update an incident's allowed fields (sys_mod_count guarded; conflict exits 7).
 Usage:
 
 ```
-snow incident update <INC number|sys_id> [--set field=value]... [--work-note <t>] [--dry-run] [--yes]
+snow incident update <INC number|sys_id> [--set field=value]... [--work-note <t>] [--expected-mod-count <n>] [--dry-run] [--yes]
 ```
 
 Examples:
@@ -657,7 +657,7 @@ Update a catalog task assigned to you: work notes, comments, limited state, assi
 Usage:
 
 ```
-snow task update <SCTASK number|sys_id> [--work-note <t>] [--comment <t>] [--state <n>] [--assigned-to <self>] [--dry-run] [--yes]
+snow task update <SCTASK number|sys_id> [--work-note <t>] [--comment <t>] [--state <n>] [--assigned-to <self>] [--expected-mod-count <n>] [--dry-run] [--yes]
 ```
 
 Examples:

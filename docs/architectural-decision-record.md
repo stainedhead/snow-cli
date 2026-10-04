@@ -78,3 +78,35 @@ Proposed (drafted here, needs review), Open (undecided, tracked elsewhere).
 - Context: tokens must not sit in plaintext by default, and keychain behaviour on macOS, Linux and WSL2 is unverified (A-13).
 - Decision: human tokens go through a `humanauth.Store` interface. Memory and failing fakes serve tests. The macOS, Linux Secret Service and WSL2 stores are stubs that fail closed (exit 3) naming the missing backend. `--insecure-store` or `SNOW_INSECURE_STORE=1` selects a 0600 JSON file at `~/.config/snow/credentials.json`. Credential values print as redacted in every format.
 - Consequences: human mode is usable only with the explicit insecure opt-in until real backends exist (`deferred.md`).
+
+## ADR-012 Okta traffic is restricted to the issuer host; login is hardened (FR-R01, FR-R09)
+
+- Status: Accepted
+- Context: login, refresh, device flow and revoke send `code`, `code_verifier` and refresh tokens; a redirect must not carry them elsewhere.
+- Decision: the Okta client allows requests only to the issuer host (host:port, same scheme). A redirect to another host or an https to http downgrade fails with `*httpx.ForbiddenHostError` (exit 4) and the body is never re-sent, including for an injected `Config.HTTP` client (its `CheckRedirect` is replaced). A refresh that hits a refused redirect returns that error (exit 4), not a login-required error. PKCE callbacks with a wrong or missing `state`, or a Host header other than the listener address, are answered 400 and ignored (login keeps waiting until the timeout); a returned id_token must carry the matching nonce. The id_token signature is not verified (it arrives directly from the token endpoint over TLS); the displayed subject is an unverified claim and never used for authorization.
+- Consequences: a state mismatch no longer aborts login; a hostile local request cannot cancel it.
+
+## ADR-013 Policy selection is pinned like mode; write limits persist across invocations (FR-R06, FR-R02)
+
+- Status: Accepted (decisions S0.1 of the review spec)
+- Decision, policy: `--policy` is refused in agent mode (exit 6, no HTTP) unless the profile sets `policy.allow_override: true`; in human mode a named policy (`agent`/`human`) must match the mode unless the override is set. Passing the same value as `policy.path` is not an override.
+- Decision, limits: `rate_limit.per_hour` and `per_run` are enforced across invocations from a flock-protected state file `ratelimit.json` (0600) next to the audit log (`auditx.StateLimiter`; unix only, fails closed elsewhere). `per_hour` is a sliding hour window keyed by agent id and rule; `per_run` is keyed by agent id, `SNOW_RUN_ID` and rule. Only policy-allowed requests consume budget; a refusal consumes none; run counters idle for 7 days are pruned. An unreadable or corrupt state file refuses the limited action (exit 1, names the path). A hourly denial is exit 6 with a "retry in ..." reason.
+- Consequences: without `SNOW_RUN_ID` every invocation is its own run, so `per_run` then bounds one process only; agents must export a stable `SNOW_RUN_ID`. No counter is shared across rules (CR-01).
+
+## ADR-014 Selftest probes and catalog order go through audited guard actions (FR-R03, FR-R04)
+
+- Status: Accepted
+- Decision, order: `catalog order` resolves the item and validates variables through the guarded read service (`CatalogGet`/`CatalogVars`), so a policy that denies `vars` makes the order exit 6 with no HTTP, and the reads appear in the audit log.
+- Decision, probes: selftest server-ACL and write probes deliberately skip the client policy (they ask the server ACL what it would allow) but are audited in block mode through `auditx.Guard.RunProbe` (`selftest.ProbeGuard`): pending record first, no request when it cannot be written, remaining probes abort after an audit failure. Verbs are `selftest:probe-list|probe-resolve|probe-update` with `policy_decision: probe_bypass`.
+- Consequences: the policy bypass is intentional and visible in the audit trail.
+
+## ADR-015 Audit identifies the target record and distinguishes previews and applied conflicts (FR-R10, FR-R08)
+
+- Status: Accepted (core workaround, see CR-10)
+- Decision: the audit `resource` carries the target as `<base>:<ref>` (for example `incident:INC0010001`; create uses the idempotency key, because the number is unknown before the POST) while policy matching stays on the base resource. Use cases set `Action.Ref` and call `usecase.SetOutcome` with `dry_run` (for `--dry-run` and `dry_run_only` previews) or `applied_conflict` (write applied, then `sys_mod_count` advanced by more than one); `auditx.Guard` reads the outcome sink and writes that label as the record outcome. The `--expected-mod-count N` flag on `incident update|resolve` and `task update` makes the pre-write check a hard precondition: a mismatch sends no PATCH (exit 7, "not applied"). Task update otherwise uses the sys_mod_count it fetched for the assignment check.
+- Consequences: end-to-end tests assert the audit lines (`TestE2EAppliedConflictAuditOutcomeAndRefSuffix`, `TestE2EDryRunAuditOutcomeAndRefSuffix`, `TestE2EExpectedModCountFlagMismatchSendsNoPatch`).
+
+## ADR-016 Typed composition seams (FR-R14)
+
+- Status: Accepted
+- Decision: `cli.Env` has typed fields (`Keychain humanauth.Store`, `HumanAuth *HumanAuthDeps`, `TaskFetcher write.TaskFetcher`, `Selftest *selftest.Service`, `PolicyErrors usecase.PolicyErrorAdapter`) instead of `Keychain any` and an `Extra` map; `cli` no longer imports `internal/sn` outside tests. If `PolicyErrors` is nil a denial is still refused but exits 1. `Guard.AllowedFields(verb, resource)` returns the allowlist of the first matching allow rule (a matching deny returns none); reads without `--fields` request exactly that allowlist. `app/human.go` keeps its own `SNOW_INSECURE_STORE` and home lookup behind a `storeFactory` seam.

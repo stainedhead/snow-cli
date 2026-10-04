@@ -37,6 +37,33 @@ func flagInt(c *Call, name string) int {
 	return n
 }
 
+// expectedModCount reads the optional --expected-mod-count flag (FR-R08): 0
+// when absent; a negative or zero explicit value is a validation error.
+func expectedModCount(c *Call) (int, error) {
+	if !flagSet(c, "expected-mod-count") {
+		return 0, nil
+	}
+	n := flagInt(c, "expected-mod-count")
+	if n < 1 {
+		return 0, &write.ValidationError{Msg: "--expected-mod-count must be a positive integer"}
+	}
+	return n, nil
+}
+
+func flagSet(c *Call, name string) bool {
+	set := false
+	c.Flags.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
+}
+
+func addModCountFlag(fs *flag.FlagSet) {
+	fs.Int("expected-mod-count", 0, "refuse to write unless the record's sys_mod_count equals N (exit 7, nothing applied)")
+}
+
 func flagKV(c *Call, name string) map[string]string {
 	kv, _ := c.Flags.Lookup(name).Value.(*kvFlag)
 	if kv == nil {
@@ -152,11 +179,12 @@ func RegisterWrite(r *Router) {
 	r.Register(Command{
 		Path:     []string{"incident", "update"},
 		Summary:  "Update an incident's allowed fields (sys_mod_count guarded; conflict exits 7).",
-		Usage:    "snow incident update <INC number|sys_id> [--set field=value]... [--work-note <t>] [--dry-run] [--yes]",
+		Usage:    "snow incident update <INC number|sys_id> [--set field=value]... [--work-note <t>] [--expected-mod-count <n>] [--dry-run] [--yes]",
 		Examples: []string{`snow incident update INC0010001 --work-note "restarted the service"`, "snow incident update INC0010001 --set state=2"},
 		Flags: func(fs *flag.FlagSet) {
 			fs.Var(&kvFlag{}, "set", "field=value to change (repeatable)")
 			fs.String("work-note", "", "work note (a provenance prefix is added)")
+			addModCountFlag(fs)
 		},
 		Run: func(ctx context.Context, c *Call) (Result, error) {
 			ref, err := needRef(c, "incident")
@@ -173,7 +201,11 @@ func RegisterWrite(r *Router) {
 			if n := flagStr(c, "work-note"); n != "" {
 				fields["work_notes"] = n
 			}
-			svc := write.IncidentService{Base: writeBase(c), Writer: c.Env.Incidents, Scale: c.Env.Profile.Incident.Scale}
+			mod, err := expectedModCount(c)
+			if err != nil {
+				return Result{}, err
+			}
+			svc := write.IncidentService{Base: writeBase(c), Writer: c.Env.Incidents, Scale: c.Env.Profile.Incident.Scale, ExpectedModCount: mod}
 			res, err := svc.Update(ctx, ref, fields)
 			return Result{Data: res}, err
 		},
@@ -182,12 +214,13 @@ func RegisterWrite(r *Router) {
 	r.Register(Command{
 		Path:      []string{"incident", "resolve"},
 		Summary:   "Resolve an incident with a close code and notes (default deny for agents).",
-		Usage:     "snow incident resolve <INC number|sys_id> --close-code <code> --close-notes <text> [--dry-run] [--yes]",
+		Usage:     "snow incident resolve <INC number|sys_id> --close-code <code> --close-notes <text> [--expected-mod-count <n>] [--dry-run] [--yes]",
 		Examples:  []string{`snow incident resolve INC0010001 --close-code "Solved (Permanently)" --close-notes "Restarted the service"`},
 		Forbidden: []string{"Agents are denied by default; ask a human to resolve."},
 		Flags: func(fs *flag.FlagSet) {
 			fs.String("close-code", "", "close code")
 			fs.String("close-notes", "", "close notes")
+			addModCountFlag(fs)
 		},
 		Run: func(ctx context.Context, c *Call) (Result, error) {
 			ref, err := needRef(c, "incident")
@@ -197,7 +230,11 @@ func RegisterWrite(r *Router) {
 			if c.Env.Incidents == nil {
 				return Result{}, notWired("incident writer")
 			}
-			svc := write.IncidentService{Base: writeBase(c), Writer: c.Env.Incidents, Scale: c.Env.Profile.Incident.Scale}
+			mod, err := expectedModCount(c)
+			if err != nil {
+				return Result{}, err
+			}
+			svc := write.IncidentService{Base: writeBase(c), Writer: c.Env.Incidents, Scale: c.Env.Profile.Incident.Scale, ExpectedModCount: mod}
 			res, err := svc.Resolve(ctx, ref, flagStr(c, "close-code"), flagStr(c, "close-notes"))
 			return Result{Data: res}, err
 		},
@@ -206,12 +243,13 @@ func RegisterWrite(r *Router) {
 	r.Register(Command{
 		Path:     []string{"task", "update"},
 		Summary:  "Update a catalog task assigned to you: work notes, comments, limited state, assigned_to self.",
-		Usage:    "snow task update <SCTASK number|sys_id> [--work-note <t>] [--comment <t>] [--state <n>] [--assigned-to <self>] [--dry-run] [--yes]",
+		Usage:    "snow task update <SCTASK number|sys_id> [--work-note <t>] [--comment <t>] [--state <n>] [--assigned-to <self>] [--expected-mod-count <n>] [--dry-run] [--yes]",
 		Examples: []string{`snow task update SCTASK0010001 --work-note "provisioned" --state 3`},
 		Flags: func(fs *flag.FlagSet) {
 			for _, n := range []string{"work-note", "comment", "state", "assigned-to"} {
 				fs.String(n, "", n)
 			}
+			addModCountFlag(fs)
 		},
 		Run: func(ctx context.Context, c *Call) (Result, error) {
 			ref, err := needRef(c, "task")
@@ -229,7 +267,11 @@ func RegisterWrite(r *Router) {
 					fields[field] = v
 				}
 			}
-			svc := write.TaskService{Base: writeBase(c), Writer: e.Tasks, Fetcher: fetcher, Identity: e.Identity}
+			mod, err := expectedModCount(c)
+			if err != nil {
+				return Result{}, err
+			}
+			svc := write.TaskService{Base: writeBase(c), Writer: e.Tasks, Fetcher: fetcher, Identity: e.Identity, ExpectedModCount: mod}
 			res, err := svc.Update(ctx, ref, fields)
 			return Result{Data: res}, err
 		},

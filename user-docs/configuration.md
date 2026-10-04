@@ -55,7 +55,8 @@ profiles:
 | `daemon.socket` | `/var/run/agent-okta-d/agent-okta-d.sock` | Credential daemon socket (agent mode). Named in the error message when unreachable. |
 | `daemon.provider` | `snow` | Provider name requested from the daemon. |
 | `audit.path` | `~/.local/state/snow/audit.jsonl` | Audit log (JSON lines). |
-| `policy.path` | none | Policy file. `--policy` overrides it. |
+| `policy.path` | none | Policy file. |
+| `policy.allow_override` | `false` | When false, `--policy` is refused in agent mode (exit 6, nothing is sent) and, in human mode, a named policy (`agent` or `human`) must match the profile mode. Passing the same value as `policy.path` is not an override. Set true only on trusted profiles. |
 | `incident.create_via` | `producer` | `producer` (record producer) or `table` (Table API). Unverified against a real instance. |
 | `incident.producer` | none | Record producer name or sys_id used when `create_via: producer`. |
 | `incident.scale` | 1 high, 2 medium, 3 low | Impact/urgency values on your instance. Validated on load. |
@@ -86,7 +87,7 @@ Place them after the command.
 | `--max-bytes N` | Output byte budget (default 32768, bounded by the policy). |
 | `--dry-run` | Preview a write without sending it. |
 | `--idempotency-key K` | Key for `incident create`. |
-| `--profile`, `--policy`, `--config` | Profile, policy (`agent`, `human` or a file) and config file. |
+| `--profile`, `--policy`, `--config` | Profile, policy (`agent`, `human` or a file; see `policy.allow_override`) and config file. |
 | `--trace` | Trace HTTP requests to standard error with tokens redacted. Human mode only; in agent mode it is denied (exit 6). |
 | `--yes` | Skip the human-mode write confirmation. |
 
@@ -126,7 +127,7 @@ Unknown or duplicate keys make the file invalid. Anything not matched by a rule 
 - Verbs: `get`, `list`, `count`, `search`, `related`, `create`, `update`, `resolve`, `order`, `vars`, `whoami`, `selftest`.
 - Resources: `table:<name>` (globs such as `table:sys_*`), `cmdb:ci`, `cmdb:app`, `incident`, `request`, `ritm`, `task`, `change`, `problem`, `catalog:item:<sys_id>`, `catalog:search`, `whoami`, `selftest`.
 - `fields` is an allowlist. For reads without `--fields`, `snow` requests exactly the allowlist.
-- `rate_limit.per_run` is per process; `per_hour` is counted by the policy engine. There is no counter shared across rules, so the agent policy puts `per_run: 10` on each write rule (an agent can exceed 10 writes in total).
+- `rate_limit.per_hour` and `per_run` are enforced across invocations from a locked state file `ratelimit.json` next to the audit log (mode 0600; unix only). `per_hour` is a sliding hour window per agent id and rule. `per_run` is counted per agent id, `SNOW_RUN_ID` and rule: export a stable `SNOW_RUN_ID` for each agent run, otherwise every invocation is its own run and `per_run` only bounds one process. A denied call exits 6 with a "retry in ..." reason (hourly). Only allowed requests count; a refused one uses no budget. If the state file cannot be read or is corrupt, the limited action is refused (exit 1, the message names the file). There is no counter shared across rules, so the agent policy puts `per_run: 10` on each write rule (an agent can exceed 10 writes in total).
 
 ### What the shipped policies do
 
@@ -155,3 +156,5 @@ Signed policies and a redaction hook are not built (a `policy.signature` key is 
 ## Audit log
 
 Every command writes JSON lines to `audit.path`. Writes use block-on-failure: a "pending" record is written before the request; if it cannot be written, nothing is sent and the command exits 1. Records carry no request bodies or tokens. Reads only warn on audit failure.
+
+Each record's `resource` names the target record where there is one, as `<base>:<ref>` (for example `incident:INC0010001`; for `incident create` the ref is the idempotency key). The `outcome` is `pending`, `ok`, `error`, `denied`, `dry_run` (a preview; nothing was sent) or `applied_conflict` (the write was applied, then another writer's change was detected). Selftest probes appear with verbs `selftest:probe-list`, `selftest:probe-resolve` and `selftest:probe-update` and `policy_decision: probe_bypass`: they skip the client policy on purpose to ask the server ACL, and are still audited.

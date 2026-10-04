@@ -33,7 +33,47 @@ Table API (`/api/now/v1/table/...` with `sysparm_fields`, `sysparm_exclude_refer
 
 ### Retry safety
 
-The core retries only idempotent methods unless a request is marked safe. `incident create` POSTs are marked safe only after the `correlation_id` dedupe query ran in the same invocation and found nothing. Catalog order POSTs are never marked safe (A-07). PATCH updates rely on the `sys_mod_count` guard.
+The core retries only idempotent methods unless a request is marked safe. Incident create POSTs are not marked safe at the transport (FR-R07): the adapter runs its own bounded loop (default 3 attempts, 200 ms doubling backoff) and re-runs the `correlation_id` dedupe lookup before each re-send; a hit returns `deduplicated: true`, a lookup failure stops with the original error. This is still not atomic across concurrent runs (check-then-create). Catalog order POSTs are never marked safe (A-07). PATCH is never marked safe (a re-sent applied PATCH would duplicate work notes); a 503 on PATCH exits 8.
+
+### Conflicts (FR-R08)
+
+The adapter reads `sys_mod_count` before the PATCH and re-reads it after. A caller-supplied `ExpectedModCount` (`--expected-mod-count N`) is a hard precondition: a mismatch sends no PATCH (exit 7, "not applied"). A post-write advance of more than one exits 7 with a message that the change WAS applied, names the record and says not to repeat it; the audit outcome is `applied_conflict`.
+
+### Encoded queries (FR-R05)
+
+`--query` is parsed, not pattern-matched: only `field OP value` clauses joined by `^` (and `^OR`) are accepted. Rejected with exit 9: `NQ`/`EQ`, `DYNAMIC`, `javascript`/`gs.` (any case or encoding), control characters, unknown operators, and values containing `^` or line breaks. Field names in clauses, in `--order-by` and in `count --query` are submitted to the policy as requested fields (allowlist denial is exit 6). ORDERBY is detected by clause position only.
+
+### Idempotency (FR-R11)
+
+An explicit `--idempotency-key` uses the charset `[A-Za-z0-9._:-]`, at most 64 characters; otherwise exit 9 before the guard (no audit, no request). The derived key checks the current and previous hour bucket. The dedupe lookup no longer filters on `active=true`, so explicit keys also match closed incidents (reuse returns the original). CI names and sys_ids give different keys (case and surrounding space are normalised, names and ids are not).
+
+### Untrusted marking (FR-R12)
+
+The rule is inverted: every string field is `untrusted` except a documented set of structured fields (sys_id, number, state codes, timestamps, class names, shape-checked references); the set is in `internal/usecase/read/present.go`. Display-name references and CI names are untrusted. `sys_updated_by`/`sys_created_by` stay plain only for lower-case login-id shapes. `read.NodeData`, `read.EdgeData` and `domain.CatalogVariable` wrap authored text through custom `MarshalJSON`; the catalog item `name` in `catalog vars` data is an `output.Untrusted` value. Author is `sys_updated_by` and timestamp `sys_updated_on` (UTC) when read.
+
+### Read policy coverage (FR-R13)
+
+Policy requests list every field fetched, including dot-walked relationship fields; `cmdb ci related` and `cmdb app` also check a `list` read on `table:cmdb_rel_ci` (the shipped agent rule `read-cmdb-related` lists `parent.name`, `child.name`, `parent.sys_class_name`, `child.sys_class_name`, `type.name`). An unclassified 5xx is a `ServerError` (exit 8, "ServiceNow server error (HTTP n)"); 429/502/503/504 stay `RateLimitedError`; bodies over 8 MiB fail with "response too large" (exit 1).
+
+### Audit records (FR-R10, FR-R04)
+
+`resource` is `<base>:<ref>`; `outcome` may be `pending`, `ok`, `error`, `denied`, `dry_run` or `applied_conflict`; selftest probes use verbs `selftest:probe-*` with `policy_decision: probe_bypass`. See ADR-014 and ADR-015.
+
+### Read-path decisions
+
+Default page size 25 (`read.DefaultLimit`), clamped by `limits.max_results`; `--order-by` always gets an `^ORDERBYsys_id` tiebreak; `--mine` filters `assigned_to.user_name=<whoami user>` (`requested_for` for requests); `cmdb ci related` is one policy check with depth 2 (max 5), a 200-node cap and cycle safety, `down` meaning the CI is the parent; `cmdb ci search --class` accepts `cmdb_ci*` names only; the read path is mode-agnostic (only the token source differs).
+
+### Write-path decisions
+
+Policy requests carry only caller-chosen fields; system-added `correlation_id`, `correlation_display` and the provenance work note are not subject to the caller's allowlist. `--ci` and `--app` both map to `cmdb_ci`. Dry-run of `incident create` sends no request; a catalog order dry-run still performs read-only catalog lookups. Confirmation (FR-047) runs inside the guarded action after policy allow and the pending record; a declined prompt is an error outcome (exit 1); non-interactive human mode without `--yes` exits 2. Unassigned tasks may be claimed; any other task not assigned to the caller is refused (exit 6).
+
+### Human auth decisions
+
+`--insecure-store` is a flag on `auth login|status|logout` and affects only that command; other commands read the same 0600 file only with `SNOW_INSECURE_STORE=1` (default `~/.config/snow/credentials.json`). Real OS keychain backends are fail-closed stubs (exit 3). `auth status|logout` are refused in agent mode (exit 6). A refresh failure from Okta is a login-required error (exit 3) showing the Okta code; credentials are kept; rotated refresh tokens are persisted atomically. Okta endpoints are `<issuer>/v1/authorize|token|revoke|device/authorize` (unverified); token lifetime defaults to 3600 s when `expires_in` is absent.
+
+### Build notes
+
+`policies.Named` is passed by `cmd/snow/main.go`; CI cross-builds with `CGO_ENABLED=0` for every target (NFR-005); `make skill-check` fails on skill drift.
 
 ## Output and bounds
 

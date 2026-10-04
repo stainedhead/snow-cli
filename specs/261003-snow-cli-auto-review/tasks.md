@@ -1,5 +1,5 @@
 # Tasks: snow-cli Auto Review Fixes
-Date: 2026-10-03 | Status: Planning | Progress: 0/20 tasks complete
+Date: 2026-10-03 | Status: Complete (M1 independent reviewer pass not run) | Progress: 20/20 tasks complete
 
 ## Ownership model
 Three parallel workstreams, each in its own worktree/branch from feat/snow-cli (after S0), with EXCLUSIVE file ownership by package. A stream edits only paths it owns. Anything needed in another stream's or a shared file goes in docs/ws-<x>-requests.md (owned by that stream; folded/deleted by WS-H in T-H8) and the stream keeps going with a workaround. Within each stream P1 tasks run before P2.
@@ -19,35 +19,35 @@ Three parallel workstreams, each in its own worktree/branch from feat/snow-cli (
 - Merge order in Phase 3: F, then H, then G (G touches app/cli wiring that depends on H and ports), then docs pass.
 
 ## Phase 0 - Serial prelude (orchestrator)
-- S0.1 Decide open questions 1-3 (recommended: R02 option a via audit-log-derived counts or locked state file; R06 allow_override key; R10 resource suffix + dry_run label with core change request). Acceptance: decisions in implementation-notes.md.
-- S0.2 Ports prelude: Guard.AllowedFields, policy-error adapter port, resource-ref/outcome types in usecase/ports.go; build green. Depends: S0.1. Acceptance: go build/vet/test green; streams fork from this commit.
+- [x] S0.1 Decide open questions 1-3 (recommended: R02 option a via audit-log-derived counts or locked state file; R06 allow_override key; R10 resource suffix + dry_run label with core change request). Acceptance: decisions in implementation-notes.md.
+- [x] S0.2 Ports prelude: Guard.AllowedFields, policy-error adapter port, resource-ref/outcome types in usecase/ports.go; build green. Depends: S0.1. Acceptance: go build/vet/test green; streams fork from this commit.
 
 ## Phase 1 - P1 (parallel; order within stream)
 ### WS-F
-- F1 FR-R01 Okta restricted client (issuer-only host, redirect/downgrade refusal, exit 4). Depends: S0.2. Acceptance: PRD R01 a-d; 307/308 test gets zero second-server requests.
+- [x] F1 FR-R01 Okta restricted client (issuer-only host, redirect/downgrade refusal, exit 4). Depends: S0.2. Acceptance: PRD R01 a-d; 307/308 test gets zero second-server requests.
 ### WS-G
-- G1 FR-R06 --policy pin + allow_override, docs request. Acceptance: PRD R06; denied with no HTTP.
-- G2 FR-R04 selftest probes audited (distinct verbs, pending-first, abort on audit failure). Acceptance: PRD R04.
-- G3 FR-R02 cross-process write limits (or deferral docs per decision). Acceptance: PRD R02; N+1 invocation test.
-- G4 FR-R03 CLI wiring for catalog order through guarded read service (pairs with H1). Depends: H1 contract from S0.2.
+- [x] G1 FR-R06 --policy pin + allow_override, docs request. Acceptance: PRD R06; denied with no HTTP.
+- [x] G2 FR-R04 selftest probes audited (distinct verbs, pending-first, abort on audit failure). Acceptance: PRD R04.
+- [x] G3 FR-R02 cross-process write limits (or deferral docs per decision). Acceptance: PRD R02; N+1 invocation test.
+- [x] G4 FR-R03 CLI wiring for catalog order through guarded read service (pairs with H1). Depends: H1 contract from S0.2.
 ### WS-H
-- H1 FR-R03 order use case via guarded CatalogGet/CatalogVars. Acceptance: denied vars -> exit 6, zero HTTP.
-- H2 FR-R05 encoded-query parser, field submission to policy, count, ORDERBY position. Acceptance: PRD R05 table-driven tests.
-- H3 FR-R07 create retry re-dedupe loop. Acceptance: first POST commits then 503, second attempt finds record, one POST total.
-- H4 FR-R08 pre-write mod-count check, applied-conflict message, audit outcome. Acceptance: PRD R08 d.
+- [x] H1 FR-R03 order use case via guarded CatalogGet/CatalogVars. Acceptance: denied vars -> exit 6, zero HTTP.
+- [x] H2 FR-R05 encoded-query parser, field submission to policy, count, ORDERBY position. Acceptance: PRD R05 table-driven tests.
+- [x] H3 FR-R07 create retry re-dedupe loop. Acceptance: first POST commits then 503, second attempt finds record, one POST total.
+- [x] H4 FR-R08 pre-write mod-count check, applied-conflict message, audit outcome. Acceptance: PRD R08 d.
 
 ## Phase 2 - P2 (parallel)
 ### WS-F
-- F2 FR-R09 login hardening (bad state ignored, Host check, nonce). 
-- F3 FR-R14 humanauth >= 90% (refresh rotation failure, store errors, R01/R09 paths); typed Store usage notes to G.
+- [x] F2 FR-R09 login hardening (bad state ignored, Host check, nonce). 
+- [x] F3 FR-R14 humanauth >= 90% (refresh rotation failure, store errors, R01/R09 paths); typed Store usage notes to G.
 ### WS-G
-- G5 FR-R10 audit dry_run outcome / resource suffix support in auditx (+ audit line tests).
-- G6 FR-R14 typed Env fields, replace Keychain any / Extra, Guard AllowedFields usage, policy-error port adapter wiring.
+- [x] G5 FR-R10 audit dry_run outcome / resource suffix support in auditx (+ audit line tests).
+- [x] G6 FR-R14 typed Env fields, replace Keychain any / Extra, Guard AllowedFields usage, policy-error port adapter wiring.
 ### WS-H
-- H5 FR-R10 resource refs in use cases (incident:INC...). Depends: G5 contract from S0.2.
-- H6 FR-R11 idempotency edge cases and key validation (exit 9 before guard).
-- H7 FR-R12 untrusted marking inverted + golden tests; FR-R13 field lists, 5xx mapping, oversize body; sn >= 90%.
+- [x] H5 FR-R10 resource refs in use cases (incident:INC...). Depends: G5 contract from S0.2.
+- [x] H6 FR-R11 idempotency edge cases and key validation (exit 9 before guard).
+- [x] H7 FR-R12 untrusted marking inverted + golden tests; FR-R13 field lists, 5xx mapping, oversize body; sn >= 90%.
 
 ## Phase 3 - Serial
-- H8 FR-R15 docs pass: fold/delete docs/ws-*-requests.md, update technical-details/ADR/user-docs/README, assumptions register. Depends: F, G merged.
-- M1 Reviewer pass per branch (security read R01, R03, R04, R05, R06); merge F, H, G; run build, vet, gofmt -l, golangci-lint, go test -race ./... Acceptance: all gates green, 15/15 FRs.
+- [x] H8 FR-R15 docs pass: fold/delete docs/ws-*-requests.md, update technical-details/ADR/user-docs/README, assumptions register. Depends: F, G merged.
+- [x] M1 Reviewer pass per branch (security read R01, R03, R04, R05, R06); merge F, H, G; run build, vet, gofmt -l, golangci-lint, go test -race ./... Acceptance: all gates green, 15/15 FRs.

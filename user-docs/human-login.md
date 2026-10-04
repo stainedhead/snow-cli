@@ -8,7 +8,7 @@ Status: tested against a fake Okta only. Not verified with a real Okta tenant or
 
 - A profile with `mode: human`, `instance.host`, `okta.issuer` and `okta.client_id` (see [configuration](configuration.md)).
 - An Okta native app for the client id, with PKCE, the loopback redirect `http://127.0.0.1:<port>/callback`, refresh tokens and (for `--device`) the device authorization grant enabled. `snow` requests the scopes `openid profile email offline_access snow.user`.
-- `snow` picks a free loopback port at random and has no setting to pin one. If your Okta app only accepts fixed redirect ports, browser login will be rejected (unverified); use `--device`.
+- `snow` picks a free loopback port at random and has no setting to pin one (a fixed port is not configurable yet). If your Okta app only accepts fixed redirect ports, browser login will be rejected (unverified); use `--device`.
 - ServiceNow must trust the Okta token you send. If calls return 401 (exit 3), try `okta.token_type: id` instead of `access` (unverified which your instance wants).
 
 ## Sign in
@@ -24,6 +24,9 @@ snow auth logout
 - `logout` revokes the tokens at Okta and deletes the stored entry even if revocation fails; both outcomes are reported.
 - Tokens refresh silently, including refresh-token rotation. If refresh fails, the Okta error is shown with exit 3; sign in again.
 - MFA is enforced by Okta, not by `snow`.
+- Okta requests go only to the issuer host. A redirect to another host, or from https to http, fails with exit 4 and no token, code or verifier is re-sent. A refresh that meets such a redirect also exits 4 (not 3).
+- During browser login, a callback with a wrong or missing `state`, or addressed to a Host other than the local listener, is answered 400 and ignored; login keeps waiting until it times out. A returned id_token must carry the matching nonce, otherwise login fails.
+- The id_token signature is not verified. The `Subject` shown by `status` is an unverified claim and is never used for authorization.
 
 ## Where credentials are stored
 

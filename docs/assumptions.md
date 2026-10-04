@@ -21,6 +21,10 @@ Every item the PRD marks with the warning sign (not confirmed in vendor document
 | A-13 | 6.2 | WSL2 can provide a keychain; Linux has a Secret Service. | Human login fails closed; use `--insecure-store` explicitly. | `TestAssumptionA13NoKeychainBackendFailsClosedWithEscapeHatch` | unverified |
 | A-14 | 8.4.6 | Rate-limit headers and `Retry-After` behave as the core httpx expects on ServiceNow inbound REST. | Backoff differs; exit 8 earlier or later. | `TestAssumptionA14RetryAfterOnInboundRateLimit` | unverified |
 
+## Review-fix notes (auto review, FR-R15)
+
+No new `ASSUMPTION(unverified against a real instance)` marker was added by the review fixes. Existing items that the fixes lean on harder: A-09 (`sys_mod_count`, now also a caller-supplied precondition via `--expected-mod-count`; when absent the guard degrades to no detection), A-04 (dedupe lookups before each create re-send), A-06 (loopback redirect; a fixed port may be required, see docs/deferred.md), A-05 and the Okta endpoint paths `<issuer>/v1/...` and the 3600 s default lifetime, A-01 and the OOB sc_task states 2 and 3 as the permitted agent states, and that the Table API resolves dot-walked fields (`parent.name`, `type.name`) for relationship reads (with A-12).
+
 ## Every PRD warning-sign item, mapped
 
 N-items are not exercised by code; they are environment, licensing, role or process facts the spike or the owners must settle.

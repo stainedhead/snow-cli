@@ -19,7 +19,7 @@ Compared `skills/snow-cli.md` in the root `agentic-teams` repository (read only,
 ## Content to add
 
 1. Availability banner. The tool is built from this repository, but agent mode cannot reach ServiceNow end to end until the `agent-okta-d` daemon adapter is released (ADR-002): agent-mode commands that need a token exit 3 and the message names the daemon socket. The banner may be removed only after a release exists and the skill's examples have run against it (SKILL-5). State the version the skill applies to.
-2. Rate limits in the shipped agent policy: `incident create` is limited to 5 per hour and every write rule to 10 per run. An exceeded limit is exit 6 with a `retry-after` style reason; do not retry in a loop.
+2. Rate limits in the shipped agent policy: `incident create` is limited to 5 per hour and every write rule to 10 per run, enforced across invocations; agents should export a stable `SNOW_RUN_ID` per run (otherwise `per_run` bounds one process). `--policy` is refused on agent profiles (exit 6). `incident update|resolve` and `task update` take `--expected-mod-count N`; after exit 7 "WAS applied" do not repeat the write. An exceeded limit is exit 6 with a `retry-after` style reason; do not retry in a loop.
 3. Forbidden fields. Agents cannot write `priority`, `state` on incidents, or any `sys_*` table; reads are limited to the policy field allowlist. Name them so agents do not probe.
 4. Resolve. `incident resolve` is denied for agents (deny rule, exit 6); humans resolve with confirmation.
 5. Untrusted free text is `untrusted: true` for `description`, `short_description`, `work_notes`, `comments` and CI descriptions (spec section 5).

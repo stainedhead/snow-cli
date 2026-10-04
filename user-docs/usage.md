@@ -21,7 +21,7 @@ snow table list incident --query active=true --limit 25 --offset 25
 snow table count incident --query active=true
 ```
 
-Options: `--query` (encoded query; `javascript:` is rejected), `--order-by field` (prefix `-` for descending; `sys_id` is always the tie-break), `--display` (display values instead of raw values). `sys_*` tables are denied by both shipped policies.
+Options: `--query` (simple encoded query: `field OP value` clauses joined by `^`, `^OR` inside a group; `NQ`, `DYNAMIC`, `javascript:`/`gs.` and control characters are rejected with exit 9; the fields used in the query and in `--order-by` must be allowed by the policy field list, otherwise exit 6), `--order-by field` (prefix `-` for descending; `sys_id` is always the tie-break), `--display` (display values instead of raw values). `sys_*` tables are denied by both shipped policies.
 
 ### CMDB
 
@@ -65,7 +65,7 @@ List results are `{items, page, acl_filtered_possible}` inside `data`:
 
 ## Writing
 
-Writes can be previewed with `--dry-run` (nothing is sent). In human mode each real write asks `[y/N]`; pass `--yes` to skip, which is required when there is no terminal (otherwise exit 2). Agent mode never prompts.
+Writes can be previewed with `--dry-run` (nothing is sent; the audit log records outcome `dry_run`). In human mode each real write asks `[y/N]`; pass `--yes` to skip, which is required when there is no terminal (otherwise exit 2). Agent mode never prompts.
 
 ### Create an incident
 
@@ -74,6 +74,8 @@ snow incident create --short-description "Disk full on db01" --description "98% 
   --ci db01 --impact 2 --urgency 3
 snow incident create --short-description "..." --description "..." --ci db01 --impact 2 --urgency 3 --dry-run
 ```
+
+Creates are deduplicated: before every retry after a transient failure `snow` looks the record up again, so a lost response does not create a second incident. Two runs started at the same moment can still both create (the check is not atomic). An explicit `--idempotency-key` may use letters, digits and `. _ : -` (max 64 characters, otherwise exit 9); it also matches closed incidents, so reuse returns the original. The default key changes if you name the CI differently (name versus sys_id).
 
 Required: `--short-description`, `--description`, `--ci` or `--app` (not both), `--impact`, `--urgency` (missing ones exit 9). Optional: `--assignment-group` (defaults from the CI's support group), `--note`, `--idempotency-key`. `priority` is never sent.
 
@@ -87,7 +89,7 @@ snow incident update INC0010001 --set state=2
 snow incident resolve INC0010001 --close-code "Solved (Permanently)" --close-notes "Restarted the service"
 ```
 
-Only policy-allowed fields can change. Updates re-read `sys_mod_count`; if someone else changed the record meanwhile the result is a conflict (exit 7; unverified). Resolve is denied for agents (exit 6) and allowed in the human policy.
+Only policy-allowed fields can change. Updates re-read `sys_mod_count`. Add `--expected-mod-count N` (also on `incident resolve` and `task update`) to require that the record is still at the `sys_mod_count` you read: if not, nothing is written (exit 7, "not applied"). If another writer's change is noticed after the write, the result is exit 7 saying the change WAS applied and naming the record; re-read it and do not repeat the update (the audit outcome is `applied_conflict`; unverified against a real instance). Resolve is denied for agents (exit 6) and allowed in the human policy.
 
 ### Update a catalog task
 

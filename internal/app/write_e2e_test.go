@@ -173,3 +173,65 @@ func TestE2EUpdateConflictExit7(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, e.out.String())
 	}
 }
+
+func lastAudit(t *testing.T, e *e2e) map[string]any {
+	t.Helper()
+	a := e.audit(t)
+	var m map[string]any
+	if err := json.Unmarshal([]byte(a[len(a)-1]), &m); err != nil {
+		t.Fatalf("audit line: %v", err)
+	}
+	return m
+}
+
+// An applied-then-conflict write (FR-R08) is audited with outcome
+// applied_conflict and the target record as the resource suffix (FR-R10).
+func TestE2EAppliedConflictAuditOutcomeAndRefSuffix(t *testing.T) {
+	e := newE2E(t)
+	id := strings.Repeat("a", 32)
+	n := 0
+	e.f.OnFunc("GET", "/api/now/v1/table/incident/"+id, func(w http.ResponseWriter, _ *http.Request) {
+		n += 2
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"sys_id": id, "sys_mod_count": string(rune('0' + n))}})
+	})
+	e.f.On("PATCH", "/api/now/v1/table/incident/"+id, snfake.Response{Status: 200, JSON: map[string]any{"result": map[string]any{"sys_id": id}}})
+	if code, _ := e.run("incident", "update", id, "--set", "state=2"); code != 7 {
+		t.Fatalf("exit %d: %s", code, e.out.String())
+	}
+	rec := lastAudit(t, e)
+	if rec["outcome"] != "applied_conflict" || rec["resource"] != "incident:"+id {
+		t.Fatalf("audit: %v", rec)
+	}
+}
+
+// --dry-run is audited as outcome dry_run with the create key as the ref.
+func TestE2EDryRunAuditOutcomeAndRefSuffix(t *testing.T) {
+	e := newE2E(t)
+	okIncident(e.f)
+	code, _ := e.run(append(e2eCreate, "--dry-run", "--idempotency-key", "key-1")...)
+	if code != 0 || len(e.f.Requests()) != 0 {
+		t.Fatalf("exit %d requests=%d", code, len(e.f.Requests()))
+	}
+	rec := lastAudit(t, e)
+	if rec["outcome"] != "dry_run" || rec["resource"] != "incident:key-1" {
+		t.Fatalf("audit: %v", rec)
+	}
+}
+
+// --expected-mod-count refuses the PATCH when the record moved (exit 7).
+func TestE2EExpectedModCountFlagMismatchSendsNoPatch(t *testing.T) {
+	e := newE2E(t)
+	id := strings.Repeat("a", 32)
+	e.f.On("GET", "/api/now/v1/table/incident/"+id, snfake.Response{Status: 200, JSON: map[string]any{"result": map[string]any{"sys_id": id, "sys_mod_count": "5"}}})
+	e.f.On("PATCH", "/api/now/v1/table/incident/"+id, snfake.Response{Status: 200, JSON: map[string]any{"result": map[string]any{"sys_id": id}}})
+	code, _ := e.run("incident", "update", id, "--set", "state=2", "--expected-mod-count", "3")
+	if code != 7 || e.f.Count("PATCH", "/api/now/v1/table/incident/"+id) != 0 {
+		t.Fatalf("exit %d patches=%d: %s", code, e.f.Count("PATCH", "/api/now/v1/table/incident/"+id), e.out.String())
+	}
+	if rec := lastAudit(t, e); rec["outcome"] != "error" {
+		t.Fatalf("not-applied conflict must be an error outcome: %v", rec)
+	}
+	if code, _ := e.run("incident", "update", id, "--set", "state=2", "--expected-mod-count", "0"); code != 9 {
+		t.Fatalf("explicit 0 must be a validation error, exit %d", code)
+	}
+}
