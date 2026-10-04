@@ -54,11 +54,12 @@ func (s Service) TableCount(ctx context.Context, table, query string) (CountData
 	if err := validTable(table); err != nil {
 		return CountData{}, err
 	}
-	if err := ValidateQuery(query); err != nil {
+	info, err := ParseQuery(query)
+	if err != nil {
 		return CountData{}, err
 	}
 	var out CountData
-	err := s.guarded(ctx, policymap.VerbCount, policymap.Table(table), nil, func(ctx context.Context) error {
+	err = s.guarded(ctx, policymap.VerbCount, policymap.Table(table), info.Fields, func(ctx context.Context) error {
 		n, err := s.Tables.Count(ctx, table, query)
 		if err != nil {
 			return err

@@ -34,6 +34,18 @@ func TestTableParams(t *testing.T) {
 			"sysparm_exclude_reference_link": {"true"},
 			"sysparm_query":                  {"ORDERBYDESCnumber"},
 		}},
+		{"ORDERBY inside a value does not suppress the default order", TableParams{Query: "short_descriptionLIKEORDERBYx"}, url.Values{
+			"sysparm_exclude_reference_link": {"true"},
+			"sysparm_query":                  {"short_descriptionLIKEORDERBYx^" + DefaultOrder},
+		}},
+		{"ORDERBY clause after a value suppresses the default", TableParams{Query: "nameLIKEx^ORDERBYDESCnumber"}, url.Values{
+			"sysparm_exclude_reference_link": {"true"},
+			"sysparm_query":                  {"nameLIKEx^ORDERBYDESCnumber"},
+		}},
+		{"explicit order is kept next to a caller ORDERBY", TableParams{Query: "a=1^ORDERBYnumber", OrderBy: "ORDERBYname"}, url.Values{
+			"sysparm_exclude_reference_link": {"true"},
+			"sysparm_query":                  {"a=1^ORDERBYnumber^ORDERBYname"},
+		}},
 		{"display only when asked", TableParams{Display: true}, url.Values{
 			"sysparm_exclude_reference_link": {"true"},
 			"sysparm_display_value":          {"true"},

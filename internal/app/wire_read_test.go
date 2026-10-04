@@ -27,7 +27,7 @@ rules:
     effect: allow
     verbs: [get, list, count]
     resources: ["table:incident", "table:task"]
-    fields: [sys_id, number, short_description, description, work_notes, state, sys_class_name, assigned_to, sys_updated_on, sys_updated_by, priority, name]
+    fields: [sys_id, number, short_description, description, work_notes, state, sys_class_name, assigned_to, sys_updated_on, sys_updated_by, priority, name, active]
   - id: typed
     effect: allow
     verbs: [get, list, search, related, vars]

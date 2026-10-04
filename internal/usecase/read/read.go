@@ -121,16 +121,26 @@ func (s Service) list(ctx context.Context, verb, resource, table string, build f
 	if err := validTable(table); err != nil {
 		return ListData{}, err
 	}
-	if err := ValidateQuery(o.Query); err != nil {
-		return ListData{}, err
-	}
-	order, err := orderClause(o.OrderBy)
+	info, err := ParseQuery(o.Query)
 	if err != nil {
 		return ListData{}, err
 	}
+	order, orderField, err := orderClause(o.OrderBy)
+	if err != nil {
+		return ListData{}, err
+	}
+	// The caller's query and order fields are requested fields too, so a
+	// policy allowlist applies to them (FR-R05).
+	policyFields := fields
+	if len(fields) > 0 {
+		policyFields = union(fields, info.Fields...)
+		if orderField != "" {
+			policyFields = union(policyFields, orderField)
+		}
+	}
 	limit := s.limit(o.Limit)
 	var out ListData
-	err = s.guarded(ctx, verb, resource, fields, func(ctx context.Context) error {
+	err = s.guarded(ctx, verb, resource, policyFields, func(ctx context.Context) error {
 		own, err := build(ctx)
 		if err != nil {
 			return err
