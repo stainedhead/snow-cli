@@ -6,7 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stainedhead/agent-cli-core/auth/authtest"
 	"github.com/stainedhead/agent-cli-core/output"
@@ -39,8 +41,8 @@ func TestFindByCorrelationHitAndMiss(t *testing.T) {
 		t.Fatalf("%v %+v", err, rec)
 	}
 	q := f.Requests()[0].Query
-	if !strings.Contains(q, "active%3Dtrue%5Ecorrelation_id%3Dsnow-abc") && !strings.Contains(q, "active=true^correlation_id=snow-abc") {
-		t.Fatalf("dedupe query %q", q)
+	if strings.Contains(q, "active") || !strings.Contains(q, "correlation_id%3Dsnow-abc") {
+		t.Fatalf("dedupe query %q must match the correlation id without an active filter (FR-R11)", q)
 	}
 	f.On("GET", incPath, snfake.Records(0))
 	rec, err = a.FindByCorrelation(context.Background(), "snow-abc")
@@ -117,27 +119,131 @@ func TestProducerRequiresConfiguredID(t *testing.T) {
 	}
 }
 
-// C3 acceptance: POST-count under injected 503. The create POST is marked safe
-// to retry (the use case ran the dedupe miss first), so 503s are retried and
-// the single logical create ends with exactly one successful POST.
-func TestCreateRetriesOn503AfterDedupeMiss(t *testing.T) {
+const created = `{"result":{"sys_id":"` + incID + `","number":"INC1"}}`
+
+func noSleep(context.Context, time.Duration) error { return nil }
+
+func retryAdapter(t *testing.T, f *snfake.Fake) *sn.IncidentAdapter {
+	return sn.NewIncidentAdapter(newClient(t, f, authtest.Valid), sn.IncidentOptions{CreateVia: "table", Sleep: noSleep})
+}
+
+// FR-R07: the first POST commits, then a gateway answers 503. The retry must
+// re-run the dedupe lookup, find the record and send no second POST.
+func TestCreateRetryFindsCommittedRecordWithoutSecondPost(t *testing.T) {
 	f := snfake.New(t)
-	f.Fail("POST", incPath, 2, snfake.Error(503, "busy"))
-	f.On("POST", incPath, snfake.Response{Status: 201, JSON: map[string]any{"result": map[string]any{"sys_id": incID, "number": "INC1"}}})
-	if _, err := tableAdapter(t, f).CreateIncident(context.Background(), createIn()); err != nil {
+	var committed atomic.Bool
+	f.OnFunc("POST", incPath, func(w http.ResponseWriter, _ *http.Request) {
+		committed.Store(true)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	f.OnFunc("GET", incPath, func(w http.ResponseWriter, _ *http.Request) {
+		if !committed.Load() {
+			_, _ = w.Write([]byte(`{"result":[]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"result":[{"sys_id":"` + incID + `","number":"INC9","correlation_id":"snow-abc"}]}`))
+	})
+	res, err := retryAdapter(t, f).CreateIncident(context.Background(), createIn())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Posts() != 3 {
-		t.Fatalf("posts=%d, want 3 (2 injected 503 + 1 success)", f.Posts())
+	if f.Posts() != 1 {
+		t.Fatalf("posts=%d, want exactly 1", f.Posts())
+	}
+	if !res.Deduplicated || res.Record.Get("number") != "INC9" {
+		t.Fatalf("%+v", res)
+	}
+}
+
+// Nothing committed: each retry re-checks, misses, and re-sends; the bound holds.
+func TestCreateRetryResendsAfterEachMiss(t *testing.T) {
+	f := snfake.New(t)
+	f.Fail("POST", incPath, 2, snfake.Error(503, "busy"))
+	f.On("POST", incPath, snfake.Response{Status: 201, Body: []byte(created)})
+	f.On("GET", incPath, snfake.Records(0))
+	res, err := retryAdapter(t, f).CreateIncident(context.Background(), createIn())
+	if err != nil || res.Deduplicated || res.Record.Get("number") != "INC1" {
+		t.Fatalf("%v %+v", err, res)
+	}
+	if f.Posts() != 3 || f.Count("GET", incPath) != 2 {
+		t.Fatalf("posts=%d lookups=%d, want 3 posts and 2 lookups", f.Posts(), f.Count("GET", incPath))
 	}
 }
 
 func TestCreatePersistent503IsExit8(t *testing.T) {
 	f := snfake.New(t)
 	f.On("POST", incPath, snfake.Error(503, "busy"))
-	_, err := tableAdapter(t, f).CreateIncident(context.Background(), createIn())
+	f.On("GET", incPath, snfake.Records(0))
+	_, err := retryAdapter(t, f).CreateIncident(context.Background(), createIn())
 	if output.ExitOf(err) != output.ExitRateLimited {
 		t.Fatalf("exit %d: %v", output.ExitOf(err), err)
+	}
+	if f.Posts() != 3 {
+		t.Fatalf("posts=%d, want the bound of 3", f.Posts())
+	}
+}
+
+func TestCreateRetryBoundIsConfigurable(t *testing.T) {
+	f := snfake.New(t)
+	f.On("POST", incPath, snfake.Error(502, "bad gateway"))
+	f.On("GET", incPath, snfake.Records(0))
+	a := sn.NewIncidentAdapter(newClient(t, f, authtest.Valid), sn.IncidentOptions{CreateVia: "table", Sleep: noSleep, MaxCreateAttempts: 1})
+	if _, err := a.CreateIncident(context.Background(), createIn()); err == nil || f.Posts() != 1 || f.Count("GET", incPath) != 0 {
+		t.Fatalf("err=%v posts=%d", err, f.Posts())
+	}
+}
+
+// If the dedupe lookup itself fails the outcome is unknown: no re-send.
+func TestCreateRetryLookupFailureStopsWithoutResend(t *testing.T) {
+	f := snfake.New(t)
+	f.On("POST", incPath, snfake.Error(503, "busy"))
+	f.On("GET", incPath, snfake.Error(400, "bad"))
+	_, err := retryAdapter(t, f).CreateIncident(context.Background(), createIn())
+	if err == nil || f.Posts() != 1 {
+		t.Fatalf("err=%v posts=%d", err, f.Posts())
+	}
+}
+
+func TestCreateNonTransientErrorIsNotRetried(t *testing.T) {
+	f := snfake.New(t)
+	f.On("POST", incPath, snfake.Error(400, "bad field"))
+	_, err := retryAdapter(t, f).CreateIncident(context.Background(), createIn())
+	if output.CategoryOf(err) != output.CategoryValidation || f.Posts() != 1 || f.Count("GET", incPath) != 0 {
+		t.Fatalf("err=%v posts=%d", err, f.Posts())
+	}
+}
+
+func TestCreate500IsRetriedWithDedupeToo(t *testing.T) {
+	f := snfake.New(t)
+	f.Fail("POST", incPath, 1, snfake.Error(500, "oops"))
+	f.On("POST", incPath, snfake.Response{Status: 201, Body: []byte(created)})
+	f.On("GET", incPath, snfake.Records(0))
+	if _, err := retryAdapter(t, f).CreateIncident(context.Background(), createIn()); err != nil || f.Posts() != 2 {
+		t.Fatalf("err=%v posts=%d", err, f.Posts())
+	}
+}
+
+func TestCreateRetryHonoursContextDuringWait(t *testing.T) {
+	f := snfake.New(t)
+	f.On("POST", incPath, snfake.Error(503, "busy"))
+	f.On("GET", incPath, snfake.Records(0))
+	boom := errors.New("cancelled")
+	a := sn.NewIncidentAdapter(newClient(t, f, authtest.Valid), sn.IncidentOptions{
+		CreateVia: "table", Sleep: func(context.Context, time.Duration) error { return boom }})
+	if _, err := a.CreateIncident(context.Background(), createIn()); !errors.Is(err, boom) || f.Posts() != 1 {
+		t.Fatalf("err=%v posts=%d", err, f.Posts())
+	}
+}
+
+func TestCreateProducerRetriesWithDedupe(t *testing.T) {
+	f := snfake.New(t)
+	const p = "/api/sn_sc/servicecatalog/items/prod1/submit_producer"
+	f.On("POST", p, snfake.Error(503, "busy"))
+	f.On("GET", incPath, snfake.Records(1, map[string]any{"sys_id": incID, "number": "INC5"}))
+	a := sn.NewIncidentAdapter(newClient(t, f, authtest.Valid), sn.IncidentOptions{CreateVia: "producer", Producer: "prod1", Sleep: noSleep})
+	res, err := a.CreateIncident(context.Background(), createIn())
+	if err != nil || !res.Deduplicated || f.Posts() != 1 {
+		t.Fatalf("err=%v posts=%d %+v", err, f.Posts(), res)
 	}
 }
 
@@ -274,5 +380,39 @@ func TestWriteErrorsMapped(t *testing.T) {
 	f.On("POST", incPath, snfake.Response{Status: 201, Body: []byte("not json")})
 	if _, err := tableAdapter(t, f).CreateIncident(context.Background(), createIn()); err == nil {
 		t.Fatal("unparseable success body must fail")
+	}
+}
+
+// FR-R08: a post-write advance means the PATCH was applied; the error says so,
+// names the record and must not suggest a plain retry.
+func TestPostWriteConflictStatesChangeWasApplied(t *testing.T) {
+	f := snfake.New(t)
+	modRoute(f, "4", "7")
+	_, err := tableAdapter(t, f).UpdateIncident(context.Background(), usecase.IncidentUpdate{Ref: incID, Fields: map[string]string{"state": "2"}})
+	var ce *sn.ConflictError
+	if !errors.As(err, &ce) || output.ExitOf(err) != output.ExitConflict {
+		t.Fatalf("want conflict: %v", err)
+	}
+	if !ce.Applied() || !strings.Contains(err.Error(), "was applied") || !strings.Contains(err.Error(), "INC1") {
+		t.Fatalf("message must say the change was applied and name the record: %v", err)
+	}
+	if h := ce.Hint(); !strings.Contains(h, "already applied") || strings.Contains(h, "retry deliberately") {
+		t.Fatalf("hint %q", h)
+	}
+	if f.Count("PATCH", incPath+"/"+incID) != 1 {
+		t.Fatal("exactly one PATCH")
+	}
+}
+
+func TestPreWriteConflictIsNotApplied(t *testing.T) {
+	f := snfake.New(t)
+	modRoute(f, "4", "5")
+	_, err := tableAdapter(t, f).UpdateIncident(context.Background(), usecase.IncidentUpdate{Ref: incID, Fields: map[string]string{"state": "2"}, ExpectedModCount: 3})
+	var ce *sn.ConflictError
+	if !errors.As(err, &ce) || ce.Applied() || !strings.Contains(err.Error(), "INC1") || !strings.Contains(err.Error(), "not applied") {
+		t.Fatalf("want a not-applied conflict naming the record: %v", err)
+	}
+	if f.Count("PATCH", incPath+"/"+incID) != 0 {
+		t.Fatal("no PATCH on a pre-write mismatch")
 	}
 }

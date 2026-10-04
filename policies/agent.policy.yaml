@@ -90,7 +90,7 @@ rules:
     effect: allow
     verbs: [related, list]
     resources: [cmdb:ci, "table:cmdb_rel_ci"]
-    fields: [sys_id, parent, child, type, sys_updated_on, name, sys_class_name]
+    fields: [sys_id, parent, child, type, sys_updated_on, name, sys_class_name, parent.name, child.name, parent.sys_class_name, child.sys_class_name, type.name]
 
   # ---- Catalog reads ----
   - id: catalog-search

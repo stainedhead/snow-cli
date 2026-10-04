@@ -66,11 +66,17 @@ var tableName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // guarded runs fn as one read action: policy check, audit, then the work.
 func (s Service) guarded(ctx context.Context, verb, resource string, fields []string, fn func(ctx context.Context) error) error {
+	return s.guardedRef(ctx, "", verb, resource, fields, fn)
+}
+
+// guardedRef is guarded with a target reference for the audit resource suffix
+// (FR-R10); policy still matches on resource alone.
+func (s Service) guardedRef(ctx context.Context, ref, verb, resource string, fields []string, fn func(ctx context.Context) error) error {
 	req := policymap.NewRequest(verb, resource)
 	if len(fields) > 0 {
 		req = policymap.WithFields(req, fields...)
 	}
-	return s.Guard.Run(ctx, usecase.Action{Kind: usecase.Read, Request: req},
+	return s.Guard.Run(ctx, usecase.Action{Kind: usecase.Read, Request: req, Ref: domain.AuditRef(ref)},
 		func(ctx context.Context, _ policy.Decision) (int, error) {
 			if err := fn(ctx); err != nil {
 				return 0, err
@@ -121,16 +127,26 @@ func (s Service) list(ctx context.Context, verb, resource, table string, build f
 	if err := validTable(table); err != nil {
 		return ListData{}, err
 	}
-	if err := ValidateQuery(o.Query); err != nil {
-		return ListData{}, err
-	}
-	order, err := orderClause(o.OrderBy)
+	info, err := ParseQuery(o.Query)
 	if err != nil {
 		return ListData{}, err
 	}
+	order, orderField, err := orderClause(o.OrderBy)
+	if err != nil {
+		return ListData{}, err
+	}
+	// The caller's query and order fields are requested fields too, so a
+	// policy allowlist applies to them (FR-R05).
+	policyFields := fields
+	if len(fields) > 0 {
+		policyFields = union(fields, info.Fields...)
+		if orderField != "" {
+			policyFields = union(policyFields, orderField)
+		}
+	}
 	limit := s.limit(o.Limit)
 	var out ListData
-	err = s.guarded(ctx, verb, resource, fields, func(ctx context.Context) error {
+	err = s.guarded(ctx, verb, resource, policyFields, func(ctx context.Context) error {
 		own, err := build(ctx)
 		if err != nil {
 			return err

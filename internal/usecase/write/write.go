@@ -6,6 +6,8 @@
 package write
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -42,7 +44,14 @@ func (b Base) confirm(prompt string) error {
 
 // preview reports whether the action must not send: --dry-run, or a
 // dry_run_only policy decision.
-func (b Base) preview(d policy.Decision) bool { return b.DryRun || d.DryRunOnly() }
+// A preview records the dry_run audit outcome (FR-R10).
+func (b Base) preview(ctx context.Context, d policy.Decision) bool {
+	if b.DryRun || d.DryRunOnly() {
+		usecase.SetOutcome(ctx, usecase.OutcomeDryRun)
+		return true
+	}
+	return false
+}
 
 // ValidationError is invalid input (exit 9).
 type ValidationError struct {
@@ -74,6 +83,19 @@ func (*DeniedError) Category() output.Category { return output.CategoryPolicyDen
 // Hint explains the guardrail.
 func (*DeniedError) Hint() string {
 	return "The client-side guardrail refused this write. ServiceNow roles remain the real boundary."
+}
+
+// appliedConflict is implemented by an error that reports a write that was
+// applied before a conflict was noticed (sn.ConflictError).
+type appliedConflict interface{ Applied() bool }
+
+// noteOutcome records the applied_conflict audit outcome when err says the
+// write was applied (FR-R08, FR-R10 outcome label).
+func noteOutcome(ctx context.Context, err error) {
+	var ac appliedConflict
+	if errors.As(err, &ac) && ac.Applied() {
+		usecase.SetOutcome(ctx, usecase.OutcomeAppliedConflict)
+	}
 }
 
 // previewResult builds a dry-run result carrying the intended payload.

@@ -25,7 +25,7 @@ func (f fakeCatalog) CatalogVars(_ context.Context, item string) (usecase.Catalo
 	if f.itemErr != nil {
 		return usecase.CatalogVars{}, f.itemErr
 	}
-	return usecase.CatalogVars{Item: map[string]any{"sys_id": itemID, "name": item}, Variables: f.vars}, f.varsErr
+	return usecase.CatalogVars{Item: map[string]any{"sys_id": itemID, "name": output.Untrusted{Value: item}}, Variables: f.vars}, f.varsErr
 }
 
 type fakeOrders struct {

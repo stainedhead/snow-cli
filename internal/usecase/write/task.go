@@ -2,6 +2,7 @@ package write
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/stainedhead/agent-cli-core/policy"
@@ -38,6 +39,9 @@ type TaskService struct {
 	Writer   usecase.TaskWriter
 	Fetcher  TaskFetcher
 	Identity usecase.Identity
+	// ExpectedModCount is a sys_mod_count the caller read earlier; 0 uses the
+	// count fetched for the assignment check (FR-R08).
+	ExpectedModCount int
 }
 
 func parseTaskRef(ref string) (string, error) {
@@ -79,7 +83,7 @@ func (s TaskService) Update(ctx context.Context, ref string, fields map[string]s
 	req := policymap.WithValues(policymap.NewRequest(policymap.VerbUpdate, policymap.ResTask), policyValues(fields))
 	send := s.withProvenance(fields)
 	var out domain.WriteResult
-	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
+	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req, Ref: domain.AuditRef(id)}, func(ctx context.Context, d policy.Decision) (int, error) {
 		me, err := s.Identity.Whoami(ctx)
 		if err != nil {
 			return 0, err
@@ -99,15 +103,20 @@ func (s TaskService) Update(ctx context.Context, ref string, fields map[string]s
 		default:
 			return 0, &DeniedError{Msg: "task " + id + " is not assigned to the calling identity"}
 		}
-		if s.preview(d) {
+		if s.preview(ctx, d) {
 			out = previewResult("sc_task", withRef(send, id))
 			return 0, nil
 		}
 		if err := s.confirm("Update task " + id + " (" + strings.Join(sortedKeys(fields), ", ") + ")?"); err != nil {
 			return 0, err
 		}
-		res, err := s.Writer.UpdateTask(ctx, usecase.TaskUpdate{Ref: id, Fields: send})
+		expected := s.ExpectedModCount
+		if n, err := strconv.Atoi(task.Get("sys_mod_count")); expected == 0 && err == nil && n > 0 {
+			expected = n
+		}
+		res, err := s.Writer.UpdateTask(ctx, usecase.TaskUpdate{Ref: id, Fields: send, ExpectedModCount: expected})
 		if err != nil {
+			noteOutcome(ctx, err)
 			return 0, err
 		}
 		out = res

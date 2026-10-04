@@ -207,14 +207,14 @@ func TestTableListPropagatesErrors(t *testing.T) {
 
 func TestTableCount(t *testing.T) {
 	ft, g := incidentTables(), newGuard(t, incidentOnly)
-	got, err := svc(t, ft, g).TableCount(context.Background(), "incident", "active=true")
+	got, err := svc(t, ft, g).TableCount(context.Background(), "incident", "state=1")
 	if err != nil || got.Count != 42 || got.Table != "incident" {
 		t.Fatalf("got %+v err %v", got, err)
 	}
 	if g.Requests[0].Verb != "count" || g.Requests[0].Resource != "table:incident" {
 		t.Errorf("request = %+v", g.Requests[0])
 	}
-	if ft.counts[0] != "incident|active=true" {
+	if ft.counts[0] != "incident|state=1" {
 		t.Errorf("count call = %v", ft.counts)
 	}
 	if _, err := svc(t, ft, g).TableCount(context.Background(), "sys_user", ""); exitOf(t, err) != output.ExitPolicyDenied {

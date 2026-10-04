@@ -25,6 +25,7 @@ type policyGuard struct {
 	t        *testing.T
 	eng      *policy.Engine
 	Requests []policy.Request
+	Refs     []string
 }
 
 var _ usecase.Guard = (*policyGuard)(nil)
@@ -42,6 +43,7 @@ func (g *policyGuard) AllowedFields(string, string) []string { return nil }
 
 func (g *policyGuard) Run(ctx context.Context, a usecase.Action, fn usecase.ActionFunc) error {
 	g.Requests = append(g.Requests, a.Request)
+	g.Refs = append(g.Refs, a.Ref)
 	if a.Kind != usecase.Read {
 		g.t.Errorf("read path issued a %v action", a.Kind)
 	}
@@ -165,3 +167,12 @@ const sid3 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 type denied struct{ error }
 
 func (denied) Category() output.Category { return output.CategoryPolicyDenied }
+
+// text returns the string of a plain or output.Untrusted value.
+func text(v any) string {
+	if u, ok := v.(output.Untrusted); ok {
+		return u.Value
+	}
+	s, _ := v.(string)
+	return s
+}

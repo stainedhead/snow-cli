@@ -88,3 +88,69 @@ func TestCheckHitMissError(t *testing.T) {
 		t.Fatalf("err not propagated: %v", err)
 	}
 }
+
+func TestKeyNormalisesCIWhitespaceAndCase(t *testing.T) {
+	if Key("a", "  DB01 ", "sd", t0) != Key("a", "db01", "sd", t0) {
+		t.Fatal("CI names are trimmed and case-folded")
+	}
+	// A name and a sys_id still give different keys (documented, FR-R11).
+	if Key("a", "db01", "sd", t0) == Key("a", strings.Repeat("a", 32), "sd", t0) {
+		t.Fatal("name and sys_id differ")
+	}
+}
+
+func TestValidateKey(t *testing.T) {
+	for _, ok := range []string{"k", "my-key_1.2:3", "snow-abc", strings.Repeat("a", MaxKeyLen)} {
+		if err := ValidateKey(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"has space", "a^b", "a=b", "tab\t", "new\nline", "ümlaut", "a/b", strings.Repeat("a", MaxKeyLen+1)} {
+		if err := ValidateKey(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	if err := ValidateKey(""); err != nil {
+		t.Errorf("empty means 'derive': %v", err)
+	}
+}
+
+func TestLookupKeysWidenWindowForDerivedKeysOnly(t *testing.T) {
+	cur, prev := Key("a", "ci", "sd", t0), Key("a", "ci", "sd", t0.Add(-time.Hour))
+	got := LookupKeys("", "a", "ci", "sd", t0)
+	if len(got) != 2 || got[0] != cur || got[1] != prev || cur == prev {
+		t.Fatalf("%v (cur %s prev %s)", got, cur, prev)
+	}
+	if got := LookupKeys("mine", "a", "ci", "sd", t0); len(got) != 1 || got[0] != "mine" {
+		t.Fatalf("explicit key: %v", got)
+	}
+}
+
+type seqFinder struct {
+	byKey map[string]*domain.Record
+	asked []string
+	err   error
+}
+
+func (f *seqFinder) FindByCorrelation(_ context.Context, id string) (*domain.Record, error) {
+	f.asked = append(f.asked, id)
+	return f.byKey[id], f.err
+}
+
+func TestCheckAnyStopsAtFirstHit(t *testing.T) {
+	rec := &domain.Record{Table: "incident", Fields: map[string]string{"number": "INC2"}}
+	f := &seqFinder{byKey: map[string]*domain.Record{"b": rec}}
+	got, err := CheckAny(context.Background(), f, []string{"a", "b", "c"})
+	if err != nil || got != rec || strings.Join(f.asked, ",") != "a,b" {
+		t.Fatalf("%v %v %v", got, err, f.asked)
+	}
+	f = &seqFinder{}
+	if got, err := CheckAny(context.Background(), f, []string{"a", "b"}); got != nil || err != nil || len(f.asked) != 2 {
+		t.Fatalf("miss: %v %v %v", got, err, f.asked)
+	}
+	boom := errors.New("boom")
+	f = &seqFinder{err: boom}
+	if _, err := CheckAny(context.Background(), f, []string{"a", "b"}); !errors.Is(err, boom) || len(f.asked) != 1 {
+		t.Fatalf("error must stop the lookups: %v %v", err, f.asked)
+	}
+}

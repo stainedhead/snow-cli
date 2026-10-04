@@ -53,7 +53,9 @@ func TestStatusMap(t *testing.T) {
 		{409, output.ExitConflict, output.CategoryConflict, func(e error) bool { var x *sn.ConflictError; return errors.As(e, &x) }},
 		{412, output.ExitConflict, output.CategoryConflict, func(e error) bool { var x *sn.ConflictError; return errors.As(e, &x) }},
 		{429, output.ExitRateLimited, output.CategoryRateLimited, func(e error) bool { var x *httpx.RateLimitedError; return errors.As(e, &x) }},
-		{500, output.ExitRateLimited, output.CategoryRateLimited, func(e error) bool { var x *httpx.RateLimitedError; return errors.As(e, &x) }},
+		{500, output.ExitRateLimited, output.CategoryRateLimited, func(e error) bool { var x *sn.ServerError; return errors.As(e, &x) }},
+		{501, output.ExitRateLimited, output.CategoryRateLimited, func(e error) bool { var x *sn.ServerError; return errors.As(e, &x) }},
+		{505, output.ExitRateLimited, output.CategoryRateLimited, func(e error) bool { var x *sn.ServerError; return errors.As(e, &x) }},
 		{503, output.ExitRateLimited, output.CategoryRateLimited, func(e error) bool { var x *httpx.RateLimitedError; return errors.As(e, &x) }},
 		{418, output.ExitGeneral, output.CategoryGeneral, func(e error) bool { var x *sn.APIError; return errors.As(e, &x) }},
 		{405, output.ExitGeneral, output.CategoryGeneral, func(e error) bool { var x *sn.APIError; return errors.As(e, &x) }},
@@ -293,5 +295,54 @@ func TestAssumptionA03ACLHiddenRecordIs404ExitFive(t *testing.T) {
 	var nf *sn.NotFoundError
 	if !errors.As(err, &nf) || output.ExitOf(err) != output.ExitNotFound {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// FR-R13: an unclassified 5xx is a server error, not "rate limited".
+func TestServerErrorMessageIsAccurate(t *testing.T) {
+	f := snfake.New(t)
+	f.On("GET", "/api/now/v1/table/incident", snfake.Error(500, "Internal failure"))
+	_, err := get(newClient(t, f, authtest.Valid), "/api/now/v1/table/incident")
+	var se *sn.ServerError
+	if !errors.As(err, &se) || se.HTTPStatus() != 500 {
+		t.Fatalf("%T %v", err, err)
+	}
+	msg := err.Error()
+	if strings.Contains(strings.ToLower(msg), "rate limited") || !strings.Contains(msg, "HTTP 500") || !strings.Contains(msg, "server error") {
+		t.Fatalf("message %q", msg)
+	}
+	if h := se.Hint(); strings.Contains(strings.ToLower(h), "rate") || h == "" {
+		t.Fatalf("hint %q", h)
+	}
+}
+
+// FR-R13: a body over the limit is reported, not truncated into a JSON error.
+func TestOversizeBodyIsResponseTooLarge(t *testing.T) {
+	f := snfake.New(t)
+	big := append([]byte(`{"result":"`), make([]byte, 9<<20)...)
+	for i := 11; i < len(big); i++ {
+		big[i] = 'a'
+	}
+	f.On("GET", "/api/now/v1/table/incident", snfake.Response{Status: 200, Body: big})
+	_, err := get(newClient(t, f, authtest.Valid), "/api/now/v1/table/incident")
+	var tl *sn.ResponseTooLargeError
+	if !errors.As(err, &tl) || output.ExitOf(err) != output.ExitGeneral {
+		t.Fatalf("%T %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "response too large") {
+		t.Fatalf("message %q", err.Error())
+	}
+	// A body exactly at the limit is fine.
+	ok := append([]byte(`{"result":"`), make([]byte, (8<<20)-13)...)
+	for i := 11; i < len(ok); i++ {
+		ok[i] = 'a'
+	}
+	ok = append(ok, '"', '}')
+	if len(ok) != 8<<20 {
+		t.Fatalf("test body is %d bytes", len(ok))
+	}
+	f.On("GET", "/api/now/v1/table/incident", snfake.Response{Status: 200, Body: ok})
+	if _, err := get(newClient(t, f, authtest.Valid), "/api/now/v1/table/incident"); err != nil {
+		t.Fatalf("a body of exactly the limit must pass: %v", err)
 	}
 }

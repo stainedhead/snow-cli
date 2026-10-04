@@ -37,8 +37,10 @@ func (p TableParams) Values() url.Values {
 		v.Set("sysparm_display_value", "true")
 	}
 	q := p.Query
-	if !p.NoOrder && !strings.Contains(q, "ORDERBY") {
-		order := p.OrderBy
+	// ORDERBY is detected by clause position, never inside a value (FR-R05).
+	// An explicit order is always appended; the default only when the caller
+	// query has no ORDERBY clause.
+	if order := p.OrderBy; !p.NoOrder && (order != "" || !hasOrderClause(q)) {
 		if order == "" {
 			order = DefaultOrder
 		}
@@ -52,6 +54,16 @@ func (p TableParams) Values() url.Values {
 		v.Set("sysparm_query", q)
 	}
 	return v
+}
+
+// hasOrderClause reports whether a ^-separated clause of q is an ORDERBY.
+func hasOrderClause(q string) bool {
+	for _, c := range strings.Split(q, "^") {
+		if strings.HasPrefix(c, "ORDERBY") {
+			return true
+		}
+	}
+	return false
 }
 
 const tableBase = "/api/now/v1/table/"

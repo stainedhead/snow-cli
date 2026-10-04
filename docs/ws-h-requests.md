@@ -1,0 +1,20 @@
+# WS-H requests and hand-off notes (folded or deleted by H8)
+
+## For WS-G (cli / app / auditx / policies)
+- FR-R08: `write.IncidentService.ExpectedModCount` and `write.TaskService.ExpectedModCount` are new struct fields. Wire an optional `--expected-mod-count N` flag on `incident update|resolve` and `task update` in internal/cli/cmd_write.go; the use case passes it to the adapter, which refuses to PATCH (exit 7, "not applied") when the record's sys_mod_count differs. Task update also uses the sys_mod_count it fetched for the assignment check when the flag is absent.
+- FR-R08/R10: use cases call `usecase.SetOutcome` with `OutcomeAppliedConflict` (applied-then-conflict) and `OutcomeDryRun` (previews: --dry-run and dry_run_only). auditx.Guard must read the sink (`usecase.WithOutcomeSink`) and map them to the audit record outcome.
+- FR-R10: actions now set `Action.Ref` (incident update/resolve: number or sys_id; incident create: the correlation key; task update: number or sys_id; reads of a single record: sys_id, number, CI name/ref sanitised by `domain.AuditRef`). The guard must log `usecase.ResourceRef(Request.Resource, Ref)`.
+- FR-R13: the shipped agent policy now lists the dot-walked relationship fields (`parent.name`, `child.name`, `parent.sys_class_name`, `child.sys_class_name`, `type.name`) on rule `read-cmdb-related`, because `cmdb ci related` and `cmdb app` now check a separate `list` read on `table:cmdb_rel_ci`. WS-H made this one-line edit in policies/agent.policy.yaml so the shipped-policy integration test stays green; keep it when merging.
+- Test fixtures edited by WS-H (G-owned files, minimal edits, keep on merge): internal/app/wire_read_test.go (readPolicy allowlist gains `active` because `--query` fields are now submitted to policy, FR-R05; CI name asserted as untrusted, FR-R12), internal/app/write_e2e_test.go (503 test now expects 4 dedupe GETs and renamed, FR-R07/R11).
+- FR-R05: `--query`/`--order-by` fields and `count --query` fields are now checked against the policy field allowlist (exit 6), and rejected query forms exit 9.
+- FR-R12: `read.NodeData`, `read.EdgeData` and `domain.CatalogVariable` have custom MarshalJSON that wraps authored text as untrusted; the catalog item `name` in `catalog vars` data is an `output.Untrusted` value (not a plain string).
+
+## Notes for the H8 docs pass
+- FR-R05: document the accepted encoded-query grammar and rejected forms (NQ/EQ, DYNAMIC, javascript/gs., control chars, unknown operators); fields in clauses and --order-by are policy-checked; count --query too.
+- FR-R07: create is no longer marked safe-to-retry at the transport; the adapter re-runs the dedupe lookup before each re-send (default 3 attempts, 200 ms doubling backoff); a lookup failure stops with the original error. Still not atomic across concurrent runs.
+- FR-R08: pre-write precondition via ExpectedModCount; post-write advance error says the change WAS applied and names the record (exit 7, hint: do not repeat); audit outcome `applied_conflict`.
+- FR-R10: audit resource suffix `:<ref>`, outcome `dry_run`; create uses the idempotency key as ref (record number unknown before the POST).
+- FR-R11: explicit key charset `[A-Za-z0-9._:-]`, max 64, exit 9 before the guard; derived key checks current and previous hour bucket; dedupe no longer filters on active=true (explicit keys therefore also match closed incidents: reuse returns the original); CI names and sys_ids give different keys (names/ids are not normalised, case/space are); concurrency (check-then-create) is not atomic across simultaneous runs.
+- FR-R12: structured field set and shapes are in internal/usecase/read/present.go; everything else is untrusted, including display-name references and CI names. `sys_updated_by`/`sys_created_by` stay plain only for lower-case login-id shapes.
+- FR-R13: unclassified 5xx -> `ServerError` (exit 8, text "ServiceNow server error (HTTP n)"); 429/502/503/504 stay RateLimitedError; bodies over 8 MiB -> "response too large" (exit 1).
+- Assumption register: no new ASSUMPTION markers were added by WS-H.

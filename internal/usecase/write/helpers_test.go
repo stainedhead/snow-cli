@@ -16,6 +16,8 @@ import (
 type engineGuard struct {
 	eng     *policy.Engine
 	actions []usecase.Action
+	// outcomes are the outcomes the actions set (one entry per Run).
+	outcomes []usecase.Outcome
 }
 
 func (g *engineGuard) AllowedFields(string, string) []string { return nil }
@@ -26,7 +28,9 @@ func (g *engineGuard) Run(ctx context.Context, a usecase.Action, fn usecase.Acti
 	if !d.Allowed && !d.DryRunOnly() {
 		return &DeniedError{Msg: d.Err().Error()}
 	}
+	ctx, sink := usecase.WithOutcomeSink(ctx)
 	_, err := fn(ctx, d)
+	g.outcomes = append(g.outcomes, sink.Outcome())
 	return err
 }
 

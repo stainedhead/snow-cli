@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/snow-cli/internal/domain"
@@ -19,13 +20,17 @@ type fakeIncidents struct {
 	resolves           []usecase.IncidentResolve
 	creates            []usecase.IncidentCreate
 	updateErr          error
-	foundKey           string
+	foundKey           string   // first key looked up
+	foundKeys          []string // every key looked up, in order
 	order              []string
 }
 
 func (f *fakeIncidents) FindByCorrelation(_ context.Context, id string) (*domain.Record, error) {
 	f.findCalls++
-	f.foundKey = id
+	if f.foundKey == "" {
+		f.foundKey = id
+	}
+	f.foundKeys = append(f.foundKeys, id)
 	f.order = append(f.order, "find")
 	return f.found, f.findErr
 }
@@ -87,7 +92,7 @@ func TestCreateDedupeMissThenCreate(t *testing.T) {
 	if res.Deduplicated || res.Record.Get("number") != "INC0010001" {
 		t.Fatalf("%+v", res)
 	}
-	if strings.Join(w.order, ",") != "find,create" {
+	if strings.Join(w.order, ",") != "find,find,create" {
 		t.Fatalf("dedupe must precede create: %v", w.order)
 	}
 	c := w.creates[0]
@@ -371,5 +376,112 @@ func TestResolveValidationDeniedDryRunConfirm(t *testing.T) {
 	s.Confirm = func(string) error { return errBoom }
 	if _, err := s.Resolve(context.Background(), "INC1", "c", "n"); err != errBoom || len(w.resolves) != 0 {
 		t.Fatalf("%v", err)
+	}
+}
+
+// FR-R08: a caller-supplied sys_mod_count reaches the adapter.
+func TestUpdateAndResolvePassExpectedModCount(t *testing.T) {
+	w := &fakeIncidents{}
+	s := svc(mustPolicy(t, allowAll), w)
+	s.ExpectedModCount = 7
+	if _, err := s.Update(context.Background(), "INC0010001", map[string]string{"state": "2"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Resolve(context.Background(), "INC0010001", "Solved", "fixed"); err != nil {
+		t.Fatal(err)
+	}
+	if w.updates[0].ExpectedModCount != 7 || w.resolves[0].ExpectedModCount != 7 {
+		t.Fatalf("%+v %+v", w.updates, w.resolves)
+	}
+	s.ExpectedModCount = 0
+	_, _ = s.Update(context.Background(), "INC0010001", map[string]string{"state": "2"})
+	if w.updates[1].ExpectedModCount != 0 {
+		t.Fatal("unset stays 0 (the adapter reads before PATCH)")
+	}
+}
+
+type appliedErr struct{}
+
+func (appliedErr) Error() string             { return "applied but conflicting" }
+func (appliedErr) Applied() bool             { return true }
+func (appliedErr) Category() output.Category { return output.CategoryConflict }
+
+func TestAppliedConflictSetsAuditOutcome(t *testing.T) {
+	w := &fakeIncidents{updateErr: appliedErr{}}
+	g := mustPolicy(t, allowAll)
+	s := svc(g, w)
+	_, err := s.Update(context.Background(), "INC0010001", map[string]string{"state": "2"})
+	wantCategory(t, err, output.CategoryConflict)
+	_, err = s.Resolve(context.Background(), "INC0010001", "Solved", "fixed")
+	wantCategory(t, err, output.CategoryConflict)
+	for i, o := range g.outcomes {
+		if o != usecase.OutcomeAppliedConflict {
+			t.Errorf("action %d outcome %q", i, o)
+		}
+	}
+	// A plain error leaves the default outcome.
+	w.updateErr = errBoom
+	g.outcomes = nil
+	_, _ = s.Update(context.Background(), "INC0010001", map[string]string{"state": "2"})
+	if g.outcomes[0] != "" {
+		t.Fatalf("outcome %q", g.outcomes[0])
+	}
+}
+
+// FR-R11: a bad explicit key is validation (exit 9) before the guard: no
+// policy check, no audit record, no request.
+func TestBadIdempotencyKeyIsValidationBeforeGuard(t *testing.T) {
+	for _, k := range []string{"has space", "a^b", strings.Repeat("x", 65), "ümlaut"} {
+		w := &fakeIncidents{}
+		g := mustPolicy(t, allowAll)
+		in := goodCreate()
+		in.IdempotencyKey = k
+		_, err := svc(g, w).Create(context.Background(), in)
+		wantCategory(t, err, output.CategoryValidation)
+		if len(g.actions) != 0 || w.findCalls+w.createN != 0 {
+			t.Fatalf("key %q: guard %d find %d create %d", k, len(g.actions), w.findCalls, w.createN)
+		}
+	}
+}
+
+// The dedupe also checks the previous hour bucket for derived keys, and a hit
+// there sends nothing.
+func TestCreateDedupesAcrossHourBoundary(t *testing.T) {
+	now := fixedClock{}.Now()
+	prev := idempotency.Key("agent-1", "db01", "Disk full", now.Add(-time.Hour))
+	f := &prevOnlyFinder{key: prev, rec: &domain.Record{Table: "incident", Fields: map[string]string{"number": "INC0000042"}}}
+	s := svc(mustPolicy(t, allowAll), f)
+	res, err := s.Create(context.Background(), goodCreate())
+	if err != nil || !res.Deduplicated || res.Record.Get("number") != "INC0000042" || f.creates != 0 {
+		t.Fatalf("%v %+v creates=%d", err, res, f.creates)
+	}
+}
+
+type prevOnlyFinder struct {
+	fakeIncidents
+	key     string
+	rec     *domain.Record
+	creates int
+}
+
+func (p *prevOnlyFinder) FindByCorrelation(_ context.Context, id string) (*domain.Record, error) {
+	if id == p.key {
+		return p.rec, nil
+	}
+	return nil, nil
+}
+
+func (p *prevOnlyFinder) CreateIncident(context.Context, usecase.IncidentCreate) (domain.WriteResult, error) {
+	p.creates++
+	return domain.WriteResult{}, nil
+}
+
+func TestExplicitKeyIsLookedUpAloneAndUsedForCreate(t *testing.T) {
+	w := &fakeIncidents{}
+	in := goodCreate()
+	in.IdempotencyKey = "k-1"
+	_, _ = svc(mustPolicy(t, allowAll), w).Create(context.Background(), in)
+	if len(w.foundKeys) != 1 || w.foundKeys[0] != "k-1" {
+		t.Fatalf("%v", w.foundKeys)
 	}
 }

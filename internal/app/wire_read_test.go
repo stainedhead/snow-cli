@@ -27,7 +27,7 @@ rules:
     effect: allow
     verbs: [get, list, count]
     resources: ["table:incident", "table:task"]
-    fields: [sys_id, number, short_description, description, work_notes, state, sys_class_name, assigned_to, sys_updated_on, sys_updated_by, priority, name]
+    fields: [sys_id, number, short_description, description, work_notes, state, sys_class_name, assigned_to, sys_updated_on, sys_updated_by, priority, name, active]
   - id: typed
     effect: allow
     verbs: [get, list, search, related, vars]
@@ -225,7 +225,7 @@ func TestReadIncidentGetByNumberAndCMDBAndCatalog(t *testing.T) {
 
 	e.fake.On("GET", "/api/now/v1/table/cmdb_ci", snfake.Records(1, map[string]any{"sys_id": sid, "name": "web01", "sys_class_name": "cmdb_ci_server"}))
 	code, m = e.run(t, "cmdb", "ci", "get", "web01")
-	if code != 0 || data(m)["name"] != "web01" {
+	if nm, _ := data(m)["name"].(map[string]any); code != 0 || nm["untrusted"] != true || nm["value"] != "web01" { // CI names are untrusted text (FR-R12)
 		t.Fatalf("cmdb ci get: %d %s", code, e.out.String())
 	}
 

@@ -2,9 +2,11 @@ package read
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/stainedhead/agent-cli-core/output"
 	"github.com/stainedhead/snow-cli/internal/domain"
@@ -83,7 +85,7 @@ func (s Service) CIGet(ctx context.Context, ref string, o Options) (map[string]a
 		policyFields = union(fields, ciIdentityFields...)
 	}
 	var out map[string]any
-	err := s.guarded(ctx, policymap.VerbGet, policymap.ResCMDBCI, policyFields, func(ctx context.Context) error {
+	err := s.guardedRef(ctx, ref, policymap.VerbGet, policymap.ResCMDBCI, policyFields, func(ctx context.Context) error {
 		r, err := s.resolveCI(ctx, tableCI, ref, fields, o.Display)
 		if err != nil {
 			return err
@@ -120,6 +122,25 @@ type NodeData struct {
 	Depth int    `json:"depth"`
 }
 
+// MarshalJSON marks the CI name as untrusted text (FR-R12); the sys_id and
+// class stay plain when they have their structured shape.
+func (n NodeData) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		SysID any `json:"sys_id"`
+		Name  any `json:"name"`
+		Class any `json:"class,omitempty"`
+		Depth int `json:"depth"`
+	}{mark("sys_id", n.SysID, "", time.Time{}), markText(n.Name), omitEmpty(mark("sys_class_name", n.Class, "", time.Time{})), n.Depth})
+}
+
+// omitEmpty turns an empty string into nil so omitempty drops it.
+func omitEmpty(v any) any {
+	if s, ok := v.(string); ok && s == "" {
+		return nil
+	}
+	return v
+}
+
 // EdgeData is one cmdb_rel_ci relationship.
 type EdgeData struct {
 	Parent     string `json:"parent"`
@@ -128,6 +149,20 @@ type EdgeData struct {
 	ChildName  string `json:"child_name,omitempty"`
 	Type       string `json:"type,omitempty"`
 	Depth      int    `json:"depth"`
+}
+
+// MarshalJSON marks the CI names and the relationship type as untrusted text
+// (FR-R12).
+func (e EdgeData) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Parent     any `json:"parent"`
+		ParentName any `json:"parent_name,omitempty"`
+		Child      any `json:"child"`
+		ChildName  any `json:"child_name,omitempty"`
+		Type       any `json:"type,omitempty"`
+		Depth      int `json:"depth"`
+	}{mark("parent", e.Parent, "", time.Time{}), omitEmpty(markText(e.ParentName)),
+		mark("child", e.Child, "", time.Time{}), omitEmpty(markText(e.ChildName)), omitEmpty(markText(e.Type)), e.Depth})
 }
 
 // RelatedData is the data of `cmdb ci related`. Direction "down" follows
@@ -161,13 +196,15 @@ func (s Service) CIRelated(ctx context.Context, ref, direction string, depth int
 	}
 	var out RelatedData
 	policyFields := ciIdentityFields
-	err := s.guarded(ctx, policymap.VerbRelated, policymap.ResCMDBCI, policyFields, func(ctx context.Context) error {
+	err := s.guardedRef(ctx, ref, policymap.VerbRelated, policymap.ResCMDBCI, policyFields, func(ctx context.Context) error {
 		root, err := s.resolveCI(ctx, tableCI, ref, ciIdentityFields, false)
 		if err != nil {
 			return err
 		}
-		out, err = s.traverse(ctx, nodeOf(root, 0), direction, depth)
-		return err
+		return s.guarded(ctx, policymap.VerbList, policymap.Table(tableRel), relFields, func(ctx context.Context) error {
+			out, err = s.traverse(ctx, nodeOf(root, 0), direction, depth)
+			return err
+		})
 	})
 	if err != nil {
 		return RelatedData{}, err
@@ -268,7 +305,7 @@ func (s Service) App(ctx context.Context, name string, o Options) (AppData, erro
 	fields := s.effectiveFields(policymap.VerbGet, policymap.ResCMDBApp, o.Fields, appDefaultFields)
 	policyFields := union(fields, ciIdentityFields...)
 	var out AppData
-	err := s.guarded(ctx, policymap.VerbGet, policymap.ResCMDBApp, policyFields, func(ctx context.Context) error {
+	err := s.guardedRef(ctx, name, policymap.VerbGet, policymap.ResCMDBApp, policyFields, func(ctx context.Context) error {
 		var found []domain.Record
 		for _, table := range []string{"cmdb_ci_service", "cmdb_ci_appl"} {
 			r, err := s.resolveCI(ctx, table, name, fields, true)
@@ -287,12 +324,14 @@ func (s Service) App(ctx context.Context, name string, o Options) (AppData, erro
 		default:
 			return ambiguous(name, found)
 		}
-		rel, err := s.traverse(ctx, nodeOf(found[0], 0), "down", 1)
-		if err != nil {
-			return err
-		}
-		out = AppData{Application: Present(found[0]), Related: rel}
-		return nil
+		return s.guarded(ctx, policymap.VerbList, policymap.Table(tableRel), relFields, func(ctx context.Context) error {
+			rel, err := s.traverse(ctx, nodeOf(found[0], 0), "down", 1)
+			if err != nil {
+				return err
+			}
+			out = AppData{Application: Present(found[0]), Related: rel}
+			return nil
+		})
 	})
 	if err != nil {
 		return AppData{}, err

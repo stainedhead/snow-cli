@@ -18,6 +18,10 @@ const incidentTable = "incident"
 type IncidentService struct {
 	Base
 	Writer usecase.IncidentWriter
+	// ExpectedModCount is a sys_mod_count the caller read earlier. When set,
+	// update and resolve refuse to write (exit 7, nothing sent) if the record
+	// moved; 0 leaves only the post-write advance check (FR-R08).
+	ExpectedModCount int
 	// Scale is the instance impact/urgency scale; zero means the OOB scale.
 	Scale domain.Scale
 }
@@ -49,6 +53,9 @@ func (s IncidentService) validateCreate(in CreateInput) error {
 	case blank(in.CI):
 		return invalid("--ci or --app is required")
 	}
+	if err := idempotency.ValidateKey(in.IdempotencyKey); err != nil {
+		return invalid("%v", err)
+	}
 	sc := s.scale()
 	if in.Impact == 0 {
 		return invalid("--impact is required (%d high, %d medium, %d low)", sc.High, sc.Medium, sc.Low)
@@ -66,13 +73,15 @@ func (s IncidentService) validateCreate(in CreateInput) error {
 }
 
 // Create implements FR-040/043/044. Priority is never sent (A-01). The
-// dedupe lookup runs inside the guarded action; the adapter marks the create
-// POST safe to retry only because this method calls it after a miss.
+// dedupe lookup runs inside the guarded action; the adapter re-runs it before
+// every re-send of the create POST (FR-R07).
 func (s IncidentService) Create(ctx context.Context, in CreateInput) (domain.WriteResult, error) {
 	if err := s.validateCreate(in); err != nil {
 		return domain.WriteResult{}, err
 	}
-	key := idempotency.Resolve(in.IdempotencyKey, s.AgentID, in.CI, in.ShortDescription, s.Clock.Now())
+	now := s.Clock.Now()
+	key := idempotency.Resolve(in.IdempotencyKey, s.AgentID, in.CI, in.ShortDescription, now)
+	lookups := idempotency.LookupKeys(in.IdempotencyKey, s.AgentID, in.CI, in.ShortDescription, now)
 	note := provenance.WorkNote(s.AgentID, s.RunID, in.WorkNote)
 	call := usecase.IncidentCreate{
 		ShortDescription: in.ShortDescription, Description: in.Description, CI: in.CI,
@@ -95,15 +104,15 @@ func (s IncidentService) Create(ctx context.Context, in CreateInput) (domain.Wri
 	req := policymap.WithValues(policymap.NewRequest(policymap.VerbCreate, policymap.ResIncident), vals)
 
 	var out domain.WriteResult
-	err := s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
-		if s.preview(d) {
+	err := s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req, Ref: domain.AuditRef(key)}, func(ctx context.Context, d policy.Decision) (int, error) {
+		if s.preview(ctx, d) {
 			out = previewResult(incidentTable, createPayload(call))
 			return 0, nil
 		}
 		if err := s.confirm("Create incident \"" + in.ShortDescription + "\" on " + in.CI + "?"); err != nil {
 			return 0, err
 		}
-		hit, err := idempotency.Check(ctx, s.Writer, key)
+		hit, err := idempotency.CheckAny(ctx, s.Writer, lookups)
 		if err != nil {
 			return 0, err
 		}
@@ -178,8 +187,9 @@ func (b Base) withProvenance(fields map[string]string) map[string]string {
 	return out
 }
 
-// Update implements FR-041. ExpectedModCount 0 asks the adapter to read
-// sys_mod_count itself and guard the write (D-j).
+// Update implements FR-041. The adapter reads sys_mod_count before the PATCH
+// and re-reads it after (D-j); a caller-supplied ExpectedModCount makes the
+// pre-write check a hard precondition (FR-R08).
 func (s IncidentService) Update(ctx context.Context, ref string, fields map[string]string) (domain.WriteResult, error) {
 	id, err := parseIncidentRef(ref)
 	if err != nil {
@@ -191,16 +201,17 @@ func (s IncidentService) Update(ctx context.Context, ref string, fields map[stri
 	req := policymap.WithValues(policymap.NewRequest(policymap.VerbUpdate, policymap.ResIncident), policyValues(fields))
 	send := s.withProvenance(fields)
 	var out domain.WriteResult
-	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
-		if s.preview(d) {
+	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req, Ref: domain.AuditRef(id)}, func(ctx context.Context, d policy.Decision) (int, error) {
+		if s.preview(ctx, d) {
 			out = previewResult(incidentTable, withRef(send, id))
 			return 0, nil
 		}
 		if err := s.confirm("Update incident " + id + " (" + strings.Join(sortedKeys(fields), ", ") + ")?"); err != nil {
 			return 0, err
 		}
-		res, err := s.Writer.UpdateIncident(ctx, usecase.IncidentUpdate{Ref: id, Fields: send})
+		res, err := s.Writer.UpdateIncident(ctx, usecase.IncidentUpdate{Ref: id, Fields: send, ExpectedModCount: s.ExpectedModCount})
 		if err != nil {
+			noteOutcome(ctx, err)
 			return 0, err
 		}
 		out = res
@@ -237,16 +248,17 @@ func (s IncidentService) Resolve(ctx context.Context, ref, closeCode, closeNotes
 		map[string]any{"close_code": closeCode, "close_notes": closeNotes})
 	notes := provenance.WorkNote(s.AgentID, s.RunID, closeNotes)
 	var out domain.WriteResult
-	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
-		if s.preview(d) {
+	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req, Ref: domain.AuditRef(id)}, func(ctx context.Context, d policy.Decision) (int, error) {
+		if s.preview(ctx, d) {
 			out = previewResult(incidentTable, map[string]string{"ref": id, "close_code": closeCode, "close_notes": notes})
 			return 0, nil
 		}
 		if err := s.confirm("Resolve incident " + id + " with close code \"" + closeCode + "\"?"); err != nil {
 			return 0, err
 		}
-		res, err := s.Writer.ResolveIncident(ctx, usecase.IncidentResolve{Ref: id, CloseCode: closeCode, CloseNote: notes})
+		res, err := s.Writer.ResolveIncident(ctx, usecase.IncidentResolve{Ref: id, CloseCode: closeCode, CloseNote: notes, ExpectedModCount: s.ExpectedModCount})
 		if err != nil {
+			noteOutcome(ctx, err)
 			return 0, err
 		}
 		out = res
