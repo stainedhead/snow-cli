@@ -34,20 +34,23 @@ const (
 )
 
 type itg struct {
-	t      *testing.T
-	f      *snfake.Fake
-	okta   *oktafake.Fake
-	dir    string
-	cfg    string
-	audit  string
-	mode   string
-	policy string
-	out    bytes.Buffer
-	errb   bytes.Buffer
-	opts   Options
+	t        *testing.T
+	f        *snfake.Fake
+	okta     *oktafake.Fake
+	dir      string
+	cfg      string
+	audit    string
+	mode     string
+	policy   string
+	override bool
+	out      bytes.Buffer
+	errb     bytes.Buffer
+	opts     Options
 }
 
 type itgOpt func(*itg)
+
+func withPolicyOverride() itgOpt { return func(i *itg) { i.override = true } }
 
 func withPolicyText(text string) itgOpt { return func(i *itg) { i.policy = text } }
 
@@ -69,7 +72,7 @@ func newItg(t *testing.T, mode string, opts ...itgOpt) *itg {
 	cfg := "default_profile: p\nprofiles:\n  p:\n    mode: " + mode + "\n    agent_id: agent-1\n" +
 		"    instance:\n      host: " + i.f.Host() + "\n" +
 		"    incident:\n      create_via: table\n" +
-		"    audit:\n      path: " + i.audit + "\n    policy:\n      path: " + polRef + "\n" +
+		"    audit:\n      path: " + i.audit + "\n    policy:\n      path: " + polRef + "\n" + overrideLine(i.override) +
 		"    selftest:\n      fixture_incident: INC0000001\n      foreign_incident: INC0000002\n"
 	if mode == "human" {
 		i.okta = oktafake.New(t)
@@ -638,4 +641,15 @@ func TestIntegrationShippedPoliciesAllowEveryReadCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func overrideLine(on bool) string {
+	if on {
+		return "      allow_override: true\n"
+	}
+	return ""
+}
+
+func okWhoami() snfake.Response {
+	return snfake.Response{JSON: map[string]any{"result": map[string]any{"user_name": "svc.agent", "roles": []string{"x"}}}}
 }

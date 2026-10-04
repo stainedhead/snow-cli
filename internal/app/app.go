@@ -187,9 +187,12 @@ func tokenSource(o Options, prof config.Resolved) (auth.TokenSource, error) {
 }
 
 func loadPolicy(o Options, g cli.GlobalFlags, prof config.Resolved) (*policy.Policy, error) {
-	sel := g.Policy
-	if sel == "" {
-		sel = prof.Policy.Path
+	sel := prof.Policy.Path
+	if g.Policy != "" {
+		if err := checkPolicyOverride(g.Policy, prof); err != nil {
+			return nil, err
+		}
+		sel = g.Policy
 	}
 	if sel == "" {
 		return nil, &config.Error{
@@ -222,6 +225,31 @@ func loadPolicy(o Options, g cli.GlobalFlags, prof config.Resolved) (*policy.Pol
 		return nil, invalidPolicy(err)
 	}
 	return p, nil
+}
+
+// checkPolicyOverride enforces the policy pin (FR-R06, spec D-i extended): the
+// mode comes from config only, and so does the policy unless the profile sets
+// policy.allow_override. Without it, --policy is refused in agent mode and a
+// named policy must match the profile mode. Naming the configured policy is
+// not an override.
+func checkPolicyOverride(flag string, prof config.Resolved) error {
+	if prof.Policy.AllowOverride || flag == prof.Policy.Path {
+		return nil
+	}
+	if prof.Mode == domain.ModeAgent {
+		return policyPinDenied(fmt.Sprintf("--policy %q is refused on an agent profile; the policy is fixed by the profile", flag))
+	}
+	if (flag == "agent" || flag == "human") && flag != string(prof.Mode) {
+		return policyPinDenied(fmt.Sprintf("--policy %q does not match the %s profile mode", flag, prof.Mode))
+	}
+	return nil
+}
+
+func policyPinDenied(reason string) error {
+	return sn.AdaptPolicyError(&policy.DeniedError{Decision: policy.Decision{
+		RuleID: "policy-pin",
+		Reason: reason + "; set policy.allow_override: true in the profile to permit it",
+	}})
 }
 
 func invalidPolicy(err error) error { return &validationError{err: err} }

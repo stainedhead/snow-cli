@@ -132,6 +132,14 @@ func TestHumanProfileGetsKeychainPlaceholderAndFailClosedToken(t *testing.T) {
 
 func TestConfigAndPolicyFailuresAreClean(t *testing.T) {
 	f := newFixture(t, "agent")
+	// --policy needs the explicit opt-in (FR-R06); the policy section is last.
+	cfg, err := os.ReadFile(f.cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f.cfgPath, append(cfg, []byte("      allow_override: true\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	if _, err := NewEnvFactory(f.opts())(ctx, cli.GlobalFlags{Config: filepath.Join(f.dir, "missing.yaml")}); output.ExitOf(err) != output.ExitUsage {
 		t.Errorf("missing config exit = %d (%v)", output.ExitOf(err), err)
@@ -140,7 +148,7 @@ func TestConfigAndPolicyFailuresAreClean(t *testing.T) {
 	if err := os.WriteFile(bad, []byte("version: 1\nbogus: true\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewEnvFactory(f.opts())(ctx, cli.GlobalFlags{Config: f.cfgPath, Policy: bad})
+	_, err = NewEnvFactory(f.opts())(ctx, cli.GlobalFlags{Config: f.cfgPath, Policy: bad})
 	if output.ExitOf(err) != output.ExitValidation {
 		t.Errorf("invalid policy exit = %d, want 9 (%v)", output.ExitOf(err), err)
 	}

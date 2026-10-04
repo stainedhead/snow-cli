@@ -140,8 +140,14 @@ func TestBuiltInPolicyNamesResolveThroughMain(t *testing.T) {
 		}
 	}
 	e := setup(t, policyAllowWhoami)
+	cfg, err := os.ReadFile(e.cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Select the built-in policy through config (the --policy flag is pinned, FR-R06).
+	mustWrite(t, e.cfg, strings.Replace(string(cfg), filepath.Join(e.dir, "p.yaml"), "agent", 1))
 	o := app.Options{Insecure: true, NamedPolicy: policies.Named}
-	code, m, _ := exec(t, o, "whoami", "--config", e.cfg, "--policy", "agent")
+	code, m, _ := exec(t, o, "whoami", "--config", e.cfg)
 	if code != 3 { // policy loaded; the daemon stub is the next failure
 		t.Fatalf("exit %d: %v", code, m)
 	}
