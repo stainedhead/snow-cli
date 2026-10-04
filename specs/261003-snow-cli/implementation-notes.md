@@ -31,3 +31,9 @@ Decisions and deviations recorded during WS-A:
 ## Spec review (step 2) findings
 - Verified against agent-cli-core v0.1.0 source: spec cites are accurate. Clarified: `policy.DeniedError` does not implement `output.CategoryError`, so snow adapts it (A5). `audit.Record` has fixed fields; "pending" is an `Outcome` label. `httpx.Config.Redactor` uses a core-internal type; leave nil.
 - tasks.md/plan.md rewritten: test-first ordering, exclusive package ownership per stream, branch/freeze rules, shared test fakes (snfake/oktafake) in WS-A, selftest moved to integration.
+
+## Integration (I1, E3, I2, E7) notes
+- Applied the WS-B/C/D/E requests (dispositions at the end of docs/ws-{b,c,d,e}-requests.md). `auditx.Guard.AllowedFields` added; `main` passes `policies.Named`; `make skill-check`; skill golden regenerated.
+- E3: `internal/usecase/selftest` + `cmd_selftest.go` + `app/wire_selftest.go`; config gained `selftest.fixture_incident` / `selftest.foreign_incident`; exit mapping documented in docs/technical-details.md. Row expectations are independent of the loaded policy so policy drift fails the matrix.
+- I2/E7: `internal/app/integration_test.go` and `security_test.go` drive `cli.RegisterAll` through `NewEnvFactory` with the shipped policies, `snfake`, `oktafake`, `authtest` and an in-memory credential store (`Options.AuditWriter` is a failure-injection seam for the audit-block test).
+- Assumption register is machine-checked by `internal/repocheck.TestAssumptionRegisterMatchesTests`.

@@ -12,6 +12,7 @@ import (
 	"github.com/stainedhead/agent-cli-core/auth/authtest"
 	"github.com/stainedhead/snow-cli/internal/app"
 	"github.com/stainedhead/snow-cli/internal/testsupport/snfake"
+	"github.com/stainedhead/snow-cli/policies"
 )
 
 const policyAllowWhoami = `
@@ -128,5 +129,20 @@ func TestUsageAndTraceGuards(t *testing.T) {
 	code, _, _ := exec(t, app.Options{Insecure: true, DaemonClient: authtest.New(authtest.Valid)}, "whoami", "--config", e.cfg, "--trace")
 	if code != 6 {
 		t.Errorf("--trace in agent mode exit = %d, want 6", code)
+	}
+}
+
+func TestBuiltInPolicyNamesResolveThroughMain(t *testing.T) {
+	// main() passes policies.Named; the run() helper mirrors the options.
+	for _, name := range []string{"agent", "human"} {
+		if b, err := policies.Named(name); err != nil || len(b) == 0 {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	e := setup(t, policyAllowWhoami)
+	o := app.Options{Insecure: true, NamedPolicy: policies.Named}
+	code, m, _ := exec(t, o, "whoami", "--config", e.cfg, "--policy", "agent")
+	if code != 3 { // policy loaded; the daemon stub is the next failure
+		t.Fatalf("exit %d: %v", code, m)
 	}
 }

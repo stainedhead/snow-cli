@@ -14,3 +14,8 @@
 ## Assumptions (for docs/assumptions)
 - ASSUMPTION(unverified against a real instance): the Okta app allows the `http://127.0.0.1:<port>/callback` loopback redirect (a fixed port may be required) and issues the `snow.user` scope (A-05). Tests: `TestPKCESuccess` (see `TestAssumptionLoopbackRedirect`).
 - ASSUMPTION(unverified against a real instance): Okta endpoints are `<issuer>/v1/authorize|token|revoke|device/authorize`; token lifetime defaults to 3600s when `expires_in` is absent.
+
+## Integration disposition
+- `Options.Getenv`/`HomeDir` are not passed to `newHumanTokenSource`/`newKeychain`: `app/human.go` keeps its own `SNOW_INSECURE_STORE` and home lookup behind the `storeFactory` seam, which the integration tests use. Accepted, no change.
+- `Env.Keychain` stays `any` (the value is a `humanauth.Store`); accepted.
+- A-06 is documented as an optional fixed `Port` (0 = free port), not the 8765-8769 range; see docs/assumptions.md and `TestAssumptionA06FixedLoopbackPortWhenConfigured`.

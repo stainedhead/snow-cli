@@ -24,3 +24,9 @@ Requests to frozen or other-stream files (applied by the integration owner) and 
 - B-A2: Service Catalog API response shapes for `items`, `items/{id}`, `items/{id}/variables` and tolerant parsing of category/type/mandatory/choices (`sn.Catalog`).
 - B-A3 (relates to A-12): the Table API resolves dot-walked fields in `sysparm_fields` (`parent.name`, `child.sys_class_name`, `type.name`) for relationship names.
 - B-A4 (relates to A-03): CI classes recognised by the `cmdb_ci` name prefix.
+
+## Integration disposition
+1. Applied: `auditx.Guard.AllowedFields(verb, resource)` returns the allowlist of the first matching allow rule (a matching deny returns none); `TestAllowedFields`, and `TestIntegrationM1ReadAllowlistedDeniedAndServerStatuses` asserts the shipped policy allowlist reaches `sysparm_fields`.
+2. Deferred (core change, R-04 in core-change-requests.md): truncation of object data is still reported inside `data` (`data.truncated`, `data.page.next_offset`); `meta.truncated` and `meta.next_offset` stay false/null for object data. See docs/deferred.md. Test: `TestIntegrationM1TruncationAndACLFilteredPage`.
+3. Applied/verified: `TestIntegrationShippedPoliciesAllowEveryReadCommand` runs every read command under the shipped agent and human policies (no default deny).
+4. Applied: human-profile read run (`TestIntegrationM1HumanProfileReadsThroughTheSameUseCases`, `...HumanExpiredTokenRefreshesAgainstOkta`).

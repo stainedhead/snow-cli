@@ -19,3 +19,8 @@ Each has a code comment `ASSUMPTION(unverified against a real instance)` and a t
 ## Requests to the integration owner
 - `internal/cli/cmd_write.go` uses `Env.Extra["write.task_fetcher"]` (set by `wire_write.go`) for the task assignee check; `Env.Catalog` (WS-B `wireRead`) is required by `catalog order`.
 - Root skill / docs: new commands `incident create|update|resolve`, `task update`, `catalog order` with global flags `--dry-run --idempotency-key --yes`.
+
+## Integration disposition
+- `Env.Extra["write.task_fetcher"]` and `Env.Catalog` are wired by `wire_write.go` / `wire_read.go`; no change needed.
+- The shipped policies (`policies/*.policy.yaml`) carry the field allowlists listed under Decisions; `TestIntegrationM2*` run create, update and order through them.
+- Root skill / docs request recorded in docs/root-skill-update-needed.md; the skill golden was regenerated at integration.

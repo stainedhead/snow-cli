@@ -32,3 +32,7 @@ Compared `skills/snow-cli.md` in the root `agentic-teams` repository (read only,
 ## Process
 
 Per SKILL-4, a change to commands, flags, exit codes, policy verbs or write modes is not complete until the root skill is updated and names its version. The release checklist includes opening that pull request against `agentic-teams`.
+
+## Selftest (added at integration)
+
+Add `snow selftest [--include-writes]` to the root skill: read-only by default, exit 1 when any matrix row fails (the message names each failing row), exit 3 when no credential is available, exit 6 when the policy denies the `selftest` verb. `--include-writes` needs `selftest.fixture_incident` and `selftest.foreign_incident` in the profile and must never be pointed at production data.

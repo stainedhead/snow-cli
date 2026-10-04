@@ -60,6 +60,7 @@ type Profile struct {
 	Policy   PolicyRef `yaml:"policy"`
 	Incident Incident  `yaml:"incident"`
 	Whoami   Whoami    `yaml:"whoami"`
+	Selftest Selftest  `yaml:"selftest"`
 }
 
 // Instance names the ServiceNow instance.
@@ -96,6 +97,14 @@ type PolicyRef struct {
 // endpoint path and response shape (A-02).
 type Whoami struct {
 	Path string `yaml:"path"`
+}
+
+// Selftest names the fixture incidents used by `snow selftest --include-writes`.
+type Selftest struct {
+	// FixtureIncident is an incident the identity may touch but never resolve.
+	FixtureIncident string `yaml:"fixture_incident"`
+	// ForeignIncident is an incident the identity must not be able to update.
+	ForeignIncident string `yaml:"foreign_incident"`
 }
 
 // Incident carries instance-specific incident settings.

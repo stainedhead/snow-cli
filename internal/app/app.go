@@ -44,6 +44,7 @@ type Options struct {
 	DaemonClient auth.DaemonClient // overrides the stub daemon client
 	Base         http.RoundTripper // underlying transport
 	Transport    httpx.Config      // retry tuning
+	AuditWriter  io.Writer         // replaces the audit file (failure injection in tests)
 }
 
 // Wiring is what stream wire_*.go files receive to attach their ports.
@@ -135,8 +136,10 @@ func build(o Options, g cli.GlobalFlags) (*built, error) {
 	if auditPath == "" {
 		auditPath = defaultAuditPath(home)
 	}
-	lg, err := audit.Open(audit.Config{Path: auditPath, OnFailure: audit.Block})
-	if err != nil {
+	var lg *audit.Logger
+	if o.AuditWriter != nil {
+		lg = audit.NewLogger(o.AuditWriter, audit.WithFailureMode(audit.Block))
+	} else if lg, err = audit.Open(audit.Config{Path: auditPath, OnFailure: audit.Block}); err != nil {
 		return nil, &auditOpenError{path: auditPath, err: err}
 	}
 
@@ -167,6 +170,7 @@ func build(o Options, g cli.GlobalFlags) (*built, error) {
 	w := &Wiring{Env: env, Client: client, Profile: prof}
 	wireRead(w)
 	wireWrite(w)
+	wireSelftest(w)
 	return &built{env: env, client: client}, nil
 }
 
