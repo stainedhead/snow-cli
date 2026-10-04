@@ -41,7 +41,7 @@ type IncidentOptions struct {
 const DefaultCreateAttempts = 3
 
 // createBackoff is the base wait between create attempts (doubled each retry).
-const createBackoff = 400 * time.Millisecond
+const createBackoff = 200 * time.Millisecond
 
 // IncidentAdapter implements usecase.IncidentWriter.
 type IncidentAdapter struct {

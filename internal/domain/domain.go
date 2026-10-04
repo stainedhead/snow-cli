@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // SysID is a 32-character lowercase hex ServiceNow record identifier.
@@ -228,4 +229,32 @@ type Identity struct {
 	Mode        Mode     `json:"mode"`
 	AgentID     string   `json:"agent_id,omitempty"`
 	RunID       string   `json:"run_id,omitempty"`
+}
+
+// AuditRefMax bounds a target reference in an audit resource.
+const AuditRefMax = 64
+
+// AuditRef makes a user-supplied target reference safe to append to an audit
+// resource (FR-R10): control characters are dropped and any character outside
+// letters, digits and . _ - : becomes "_"; the result is at most AuditRefMax
+// bytes. Numbers, sys_ids and idempotency keys pass through unchanged.
+func AuditRef(s string) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(s) {
+		switch {
+		case unicode.IsControl(r):
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-', r == ':':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+		if b.Len() >= AuditRefMax {
+			break
+		}
+	}
+	out := b.String()
+	if len(out) > AuditRefMax {
+		out = out[:AuditRefMax]
+	}
+	return out
 }

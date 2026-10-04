@@ -44,7 +44,14 @@ func (b Base) confirm(prompt string) error {
 
 // preview reports whether the action must not send: --dry-run, or a
 // dry_run_only policy decision.
-func (b Base) preview(d policy.Decision) bool { return b.DryRun || d.DryRunOnly() }
+// A preview records the dry_run audit outcome (FR-R10).
+func (b Base) preview(ctx context.Context, d policy.Decision) bool {
+	if b.DryRun || d.DryRunOnly() {
+		usecase.SetOutcome(ctx, usecase.OutcomeDryRun)
+		return true
+	}
+	return false
+}
 
 // ValidationError is invalid input (exit 9).
 type ValidationError struct {

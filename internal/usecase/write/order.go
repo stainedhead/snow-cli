@@ -43,7 +43,7 @@ func (s OrderService) Order(ctx context.Context, item string, vars map[string]st
 	req := policymap.WithValues(policymap.NewRequest(policymap.VerbOrder, policymap.CatalogItem(it.SysID)), policyValues(vars))
 	var out domain.WriteResult
 	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
-		if s.preview(d) {
+		if s.preview(ctx, d) {
 			f := map[string]string{"item": it.SysID, "name": it.Name}
 			for k, v := range vars {
 				f["var."+k] = v

@@ -76,7 +76,7 @@ func (s Service) WorkGet(ctx context.Context, kind Kind, ref string, o Options) 
 	}
 	fields := s.effectiveFields(policymap.VerbGet, info.resource, o.Fields, append(append([]string(nil), info.defaults...), "description"))
 	var out map[string]any
-	err := s.guarded(ctx, policymap.VerbGet, info.resource, fields, func(ctx context.Context) error {
+	err := s.guardedRef(ctx, firstNonEmpty(number, strings.ToLower(ref)), policymap.VerbGet, info.resource, fields, func(ctx context.Context) error {
 		var r domain.Record
 		if number == "" {
 			var err error

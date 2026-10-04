@@ -66,11 +66,17 @@ var tableName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // guarded runs fn as one read action: policy check, audit, then the work.
 func (s Service) guarded(ctx context.Context, verb, resource string, fields []string, fn func(ctx context.Context) error) error {
+	return s.guardedRef(ctx, "", verb, resource, fields, fn)
+}
+
+// guardedRef is guarded with a target reference for the audit resource suffix
+// (FR-R10); policy still matches on resource alone.
+func (s Service) guardedRef(ctx context.Context, ref, verb, resource string, fields []string, fn func(ctx context.Context) error) error {
 	req := policymap.NewRequest(verb, resource)
 	if len(fields) > 0 {
 		req = policymap.WithFields(req, fields...)
 	}
-	return s.Guard.Run(ctx, usecase.Action{Kind: usecase.Read, Request: req},
+	return s.Guard.Run(ctx, usecase.Action{Kind: usecase.Read, Request: req, Ref: domain.AuditRef(ref)},
 		func(ctx context.Context, _ policy.Decision) (int, error) {
 			if err := fn(ctx); err != nil {
 				return 0, err

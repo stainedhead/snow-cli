@@ -28,7 +28,7 @@ func (s Service) TableGet(ctx context.Context, table, sysID string, o Options) (
 	res := policymap.Table(table)
 	fields := s.effectiveFields(policymap.VerbGet, res, o.Fields, genericFields)
 	var out map[string]any
-	err := s.guarded(ctx, policymap.VerbGet, res, fields, func(ctx context.Context) error {
+	err := s.guardedRef(ctx, sysID, policymap.VerbGet, res, fields, func(ctx context.Context) error {
 		r, err := s.Tables.Get(ctx, table, sysID, usecase.GetOptions{Fields: fields, Display: o.Display})
 		if err != nil {
 			return err

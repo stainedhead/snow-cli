@@ -83,7 +83,7 @@ func (s TaskService) Update(ctx context.Context, ref string, fields map[string]s
 	req := policymap.WithValues(policymap.NewRequest(policymap.VerbUpdate, policymap.ResTask), policyValues(fields))
 	send := s.withProvenance(fields)
 	var out domain.WriteResult
-	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
+	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req, Ref: domain.AuditRef(id)}, func(ctx context.Context, d policy.Decision) (int, error) {
 		me, err := s.Identity.Whoami(ctx)
 		if err != nil {
 			return 0, err
@@ -103,7 +103,7 @@ func (s TaskService) Update(ctx context.Context, ref string, fields map[string]s
 		default:
 			return 0, &DeniedError{Msg: "task " + id + " is not assigned to the calling identity"}
 		}
-		if s.preview(d) {
+		if s.preview(ctx, d) {
 			out = previewResult("sc_task", withRef(send, id))
 			return 0, nil
 		}

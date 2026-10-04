@@ -234,3 +234,22 @@ func TestAssumptionA01DefaultScaleIsOutOfBox(t *testing.T) {
 		t.Errorf("default scale = %+v", s)
 	}
 }
+
+func TestAuditRef(t *testing.T) {
+	long := strings.Repeat("a", 200)
+	cases := map[string]string{
+		"INC0010001":       "INC0010001",
+		"  INC1  ":         "INC1",
+		"a\nb\x00c":        "abc",
+		"my server":        "my_server",
+		"":                 "",
+		long:               long[:AuditRefMax],
+		"x:y":              "x:y",
+		"päth/segment\t\r": "p_th_segment",
+	}
+	for in, want := range cases {
+		if got := AuditRef(in); got != want {
+			t.Errorf("AuditRef(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

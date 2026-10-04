@@ -123,14 +123,14 @@ func TestE2EDuplicateCreateIsDeduplicated(t *testing.T) {
 	}
 }
 
-func TestE2ECreate503RetriedAfterDedupeMiss(t *testing.T) {
+func TestE2ECreate503ReDedupesBeforeEachResend(t *testing.T) {
 	e := newE2E(t)
 	okIncident(e.f)
 	e.f.Fail("POST", "/api/now/v1/table/incident", 2, snfake.Error(503, "busy"))
 	if code, _ := e.run(e2eCreate...); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.out.String())
 	}
-	if e.f.Posts() != 3 || e.f.Count("GET", "/api/now/v1/table/incident") != 1 {
+	if e.f.Posts() != 3 || e.f.Count("GET", "/api/now/v1/table/incident") != 3 {
 		t.Fatalf("posts=%d dedupe GETs=%d", e.f.Posts(), e.f.Count("GET", "/api/now/v1/table/incident"))
 	}
 }

@@ -83,7 +83,7 @@ func (s Service) CIGet(ctx context.Context, ref string, o Options) (map[string]a
 		policyFields = union(fields, ciIdentityFields...)
 	}
 	var out map[string]any
-	err := s.guarded(ctx, policymap.VerbGet, policymap.ResCMDBCI, policyFields, func(ctx context.Context) error {
+	err := s.guardedRef(ctx, ref, policymap.VerbGet, policymap.ResCMDBCI, policyFields, func(ctx context.Context) error {
 		r, err := s.resolveCI(ctx, tableCI, ref, fields, o.Display)
 		if err != nil {
 			return err
@@ -161,7 +161,7 @@ func (s Service) CIRelated(ctx context.Context, ref, direction string, depth int
 	}
 	var out RelatedData
 	policyFields := ciIdentityFields
-	err := s.guarded(ctx, policymap.VerbRelated, policymap.ResCMDBCI, policyFields, func(ctx context.Context) error {
+	err := s.guardedRef(ctx, ref, policymap.VerbRelated, policymap.ResCMDBCI, policyFields, func(ctx context.Context) error {
 		root, err := s.resolveCI(ctx, tableCI, ref, ciIdentityFields, false)
 		if err != nil {
 			return err
@@ -268,7 +268,7 @@ func (s Service) App(ctx context.Context, name string, o Options) (AppData, erro
 	fields := s.effectiveFields(policymap.VerbGet, policymap.ResCMDBApp, o.Fields, appDefaultFields)
 	policyFields := union(fields, ciIdentityFields...)
 	var out AppData
-	err := s.guarded(ctx, policymap.VerbGet, policymap.ResCMDBApp, policyFields, func(ctx context.Context) error {
+	err := s.guardedRef(ctx, name, policymap.VerbGet, policymap.ResCMDBApp, policyFields, func(ctx context.Context) error {
 		var found []domain.Record
 		for _, table := range []string{"cmdb_ci_service", "cmdb_ci_appl"} {
 			r, err := s.resolveCI(ctx, table, name, fields, true)

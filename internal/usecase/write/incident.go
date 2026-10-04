@@ -99,8 +99,8 @@ func (s IncidentService) Create(ctx context.Context, in CreateInput) (domain.Wri
 	req := policymap.WithValues(policymap.NewRequest(policymap.VerbCreate, policymap.ResIncident), vals)
 
 	var out domain.WriteResult
-	err := s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
-		if s.preview(d) {
+	err := s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req, Ref: domain.AuditRef(key)}, func(ctx context.Context, d policy.Decision) (int, error) {
+		if s.preview(ctx, d) {
 			out = previewResult(incidentTable, createPayload(call))
 			return 0, nil
 		}
@@ -196,8 +196,8 @@ func (s IncidentService) Update(ctx context.Context, ref string, fields map[stri
 	req := policymap.WithValues(policymap.NewRequest(policymap.VerbUpdate, policymap.ResIncident), policyValues(fields))
 	send := s.withProvenance(fields)
 	var out domain.WriteResult
-	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
-		if s.preview(d) {
+	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req, Ref: domain.AuditRef(id)}, func(ctx context.Context, d policy.Decision) (int, error) {
+		if s.preview(ctx, d) {
 			out = previewResult(incidentTable, withRef(send, id))
 			return 0, nil
 		}
@@ -243,8 +243,8 @@ func (s IncidentService) Resolve(ctx context.Context, ref, closeCode, closeNotes
 		map[string]any{"close_code": closeCode, "close_notes": closeNotes})
 	notes := provenance.WorkNote(s.AgentID, s.RunID, closeNotes)
 	var out domain.WriteResult
-	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req}, func(ctx context.Context, d policy.Decision) (int, error) {
-		if s.preview(d) {
+	err = s.Guard.Run(ctx, usecase.Action{Kind: usecase.Write, Request: req, Ref: domain.AuditRef(id)}, func(ctx context.Context, d policy.Decision) (int, error) {
+		if s.preview(ctx, d) {
 			out = previewResult(incidentTable, map[string]string{"ref": id, "close_code": closeCode, "close_notes": notes})
 			return 0, nil
 		}
