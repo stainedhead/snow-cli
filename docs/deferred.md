@@ -19,3 +19,4 @@ Everything here is intentionally absent from this release. Nothing is stubbed to
 | Live `selftest` in CI | On demand only, never in PR CI (BLD-4) | Needs a sub-production instance with short-lived credentials. |
 | Branch protection / required status check (BLD-5) | Not configured | Separate step after CI is green. |
 | Truncation of object data in the core envelope (R-04) | `read.Fit` trims `items` and reports `data.truncated` / `data.page.next_offset`; `meta.truncated` and `meta.next_offset` are not set for object data | Needs a core change (`output.fit` honouring a caller-set `Meta.Truncated`/`NextOffset` or cutting `items`); see docs/ws-b-requests.md. |
+| Fixed loopback port for the Okta redirect | Not configurable: browser login binds a random free port; `--device` is the fallback | The Okta redirect rules are unverified (A-06); a config key is a small addition once known. |

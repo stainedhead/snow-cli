@@ -57,3 +57,24 @@ Proposed (drafted here, needs review), Open (undecided, tracked elsewhere).
 
 - Status: Open (decided by M0 spike, A-05)
 - Decision for now: config `okta.token_type: access|id`, default `access`. Changing the default after the spike is a one-line change.
+
+## ADR-009 Stdlib `flag` with a small command router
+
+- Status: Accepted (revisitable)
+- Context: the command set is a fixed tree of noun-verb commands; the skill generator needs usage, examples and forbidden actions per command.
+- Decision: `internal/cli` has its own router over the standard library `flag` package. Each command is registered with path, usage, examples, forbidden actions and a flag function; the same registry feeds `help` and `skill generate`. No third-party CLI framework.
+- Consequences: no new dependency and no drift between help, skill and code. Global flags go after the command. Shell completion and nested flag inheritance are not provided.
+
+## ADR-010 Write path: pending audit record, dedupe before retry, order never retried
+
+- Status: Accepted (D-c)
+- Context: a retried POST can create duplicates, and an audit gap on a write is worse than a refused write.
+- Decision: writes run under the audit logger in block mode: a pending record is written before the request and a failure aborts with no request sent (exit 1). The outcome record follows; if it fails the error says the write may have happened. Incident create POSTs are marked safe to retry only after the `correlation_id` dedupe query found nothing. Catalog order POSTs are never marked safe because no retrievable dedupe key is confirmed (A-07). Updates use the `sys_mod_count` guard (A-09).
+- Consequences: repeated creates within the hour return the existing record; a transient order failure exits 8 with a hint to check `snow request list`. Correctness depends on the unverified `correlation_id` and `sys_mod_count` assumptions.
+
+## ADR-011 Human credential store behind an interface; real backends not built
+
+- Status: Accepted (revisit when backends land)
+- Context: tokens must not sit in plaintext by default, and keychain behaviour on macOS, Linux and WSL2 is unverified (A-13).
+- Decision: human tokens go through a `humanauth.Store` interface. Memory and failing fakes serve tests. The macOS, Linux Secret Service and WSL2 stores are stubs that fail closed (exit 3) naming the missing backend. `--insecure-store` or `SNOW_INSECURE_STORE=1` selects a 0600 JSON file at `~/.config/snow/credentials.json`. Credential values print as redacted in every format.
+- Consequences: human mode is usable only with the explicit insecure opt-in until real backends exist (`deferred.md`).
